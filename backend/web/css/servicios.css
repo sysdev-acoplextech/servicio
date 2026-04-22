@@ -1,0 +1,76 @@
+    .boton-imagen {
+        display: inline-block;
+        /* Permite que el enlace se comporte como un bloque */
+        text-decoration: none;
+        /* Elimina el subrayado del enlace */
+        border-radius: 8px;
+        /* Bordes redondeados */
+        overflow: hidden;
+        /* Asegura que el contenido no sobresalga */
+        transition: transform 0.3s;
+        /* Transición suave para el efecto hover */
+    }
+
+    .label_a {
+        display: inline;
+        padding: .2em .6em .3em;
+        font-size: 100%;
+        font-weight: 700;
+        line-height: 1;
+        text-align: center;
+        white-space: nowrap;
+        vertical-align: baseline;
+        border-radius: .25em;
+
+    }
+
+    .boton-imagen img {
+        display: block;
+        /* Elimina el espacio debajo de la imagen */
+        width: 100%;
+        /* Ajusta la imagen al tamaño del contenedor */
+        height: auto;
+        /* Mantiene la proporción de la imagen */
+    }
+
+    .boton-imagen:hover {
+        transform: scale(1.05);
+        /* Aumenta ligeramente el tamaño al pasar el mouse */
+    }
+
+    .imagen-check {
+        position: relative;
+        /* Necesario para posicionar el pseudo-elemento */
+        display: inline-block;
+        /* Permite que el contenedor se ajuste al tamaño de la imagen */
+    }
+
+    .imagen-check img {
+        display: block;
+        /* Elimina el espacio debajo de la imagen */
+        width: 100%;
+        /* Ajusta la imagen al tamaño del contenedor */
+        height: auto;
+        /* Mantiene la proporción de la imagen */
+    }
+
+    .imagen-check::after {
+        content: "✔";
+        /* Símbolo de check */
+        position: absolute;
+        /* Posiciona el check sobre la imagen */
+        top: 2px;
+        /* Ajusta la posición vertical */
+        left: 100px;
+        /* Ajusta la posición horizontal */
+        font-size: 24px;
+        /* Tamaño del check */
+        color: white;
+        /* Color del check */
+        background-color: green;
+        /* Fondo semi-transparente */
+        border-radius: 50%;
+        /* Bordes redondeados */
+        padding: 5px;
+        /* Espaciado alrededor del check */
+    }

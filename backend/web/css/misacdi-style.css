@@ -1,0 +1,196 @@
+/* =============================================
+   TIPOGRAFÍAS Y FUENTES (Averta)
+   ============================================= */
+
+    @font-face {
+        font-family: 'Averta';
+        /* Usamos ruta física absoluta para que mPDF no falle, igual que con las fotos */
+        src: url('<?= Yii::getAlias("@webroot/fonts/averta/Averta-Regular.ttf") ?>');
+        font-weight: normal;
+    }
+    @font-face {
+        font-family: 'Averta';
+        src: url('<?= Yii::getAlias("@webroot/fonts/averta/Averta-Bold.ttf") ?>');
+        font-weight: bold;
+    }
+
+/* =============================================
+   ESTILOS GLOBALES Y BASES
+   ============================================= */
+
+body {
+    font-family: 'Averta', sans-serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #1B242D;
+    background-color: #F0F0F0; /* Fondo general del sistema */
+}
+
+/* =============================================
+   FICHAS Y CONTENEDORES (MISACDI DESIGN)
+   ============================================= */
+
+/* Fichas Grandes (Cards, Modales, Secciones) */
+.ficha-grande, .box, .modal-content, .card {
+    border-radius: 12px !important;
+    background-color: #FFFFFF;
+    box-shadow: 2px 2px 2px rgba(0, 0, 0, 0.20) !important;
+    border: 1px solid #F0F0F0 !important;
+    overflow: hidden;
+}
+
+/* Fichas Pequeñas (Inputs, Botones, Selects) */
+.ficha-pequena, .form-control, .btn, .select2-selection, .input-group-addon {
+    border-radius: 7px !important;
+    border: 1px solid #F0F0F0;
+}
+
+/* Sombra Estándar del Manual */
+.sombra-misacdi {
+    box-shadow: 2px 2px 2px rgba(0, 0, 0, 0.20) !important;
+}
+
+/* =============================================
+   JERARQUÍA DE TEXTOS
+   ============================================= */
+
+/* Títulos Principales 17pt */
+h1, .titulo-principal {
+    font-family: 'Averta Semibold', sans-serif;
+    font-size: 17pt;
+    color: #1B242D;
+    font-weight: 600;
+}
+
+/* Títulos Secundarios 13pt */
+h2, .titulo-seccion {
+    font-family: 'Averta Semibold', sans-serif;
+    font-size: 13pt;
+    color: #1B242D;
+}
+
+/* Títulos de Tarjetas 12pt */
+h3, .card-title, .titulo-tarjeta {
+    font-family: 'Averta Semibold', sans-serif;
+    font-size: 12pt;
+    color: #334155;
+}
+
+/* Importes y Cantidades 12pt Bold - Color Naranja */
+.importe, .valor-numerico, .stat-number, .precio {
+    font-family: 'Averta Bold', sans-serif;
+    font-size: 12pt;
+    font-weight: bold;
+    color: #EA4C2D !important;
+}
+
+/* Textos de Menú y Etiquetas 10pt Semibold */
+.control-label, .menu-texto, .nav-link, .btn {
+    font-family: 'Averta Semibold', sans-serif;
+    font-size: 10pt;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+/* Texto de Fichas y Tablas 11pt */
+.info-value, .table td, .card-text {
+    font-family: 'Averta Demo', sans-serif;
+    font-size: 11pt;
+    color: #666666;
+}
+
+/* =============================================
+   BOTONES Y ACCIONES
+   ============================================= */
+
+.btn-primary-misacdi {
+    background-color: #1B242D !important;
+    color: #FFFFFF !important;
+    font-family: 'Averta Semibold', sans-serif;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.btn-primary-misacdi:hover {
+    background-color: #EA4C2D !important; /* Cambio a naranja al pasar el mouse */
+    transform: translateY(-1px);
+}
+
+.btn-orange-misacdi {
+    background-color: #EA4C2D !important;
+    color: #FFFFFF !important;
+    border: none;
+}
+
+/* =============================================
+   TABLAS Y GRIDVIEW
+   ============================================= */
+
+.table thead th {
+    background-color: #F0F0F0;
+    font-family: 'Averta Semibold', sans-serif;
+    font-size: 10pt;
+    color: #666666;
+    border: none !important;
+}
+
+.table td {
+    vertical-align: middle !important;
+    border-top: 1px solid #F0F0F0 !important;
+}
+
+/* =============================================
+   DASHBOARD / STAT CARDS
+   ============================================= */
+
+.stat-card-dark {
+    background-color: #1B242D;
+    color: #FFFFFF;
+    padding: 20px;
+}
+
+.stat-card-light {
+    background-color: #98C1D9;
+    color: #1B242D;
+    padding: 20px;
+}
+
+.valor-grande {
+    font-size: 18pt;
+    font-family: 'Averta Bold', sans-serif;
+}
+/* Contenedor principal de la foto */
+.kv-preview-thumb, 
+.file-preview-frame, 
+.file-preview-image {
+    width: 100% !important;
+    height: 180px !important; /* Ajusta esta altura a tu gusto */
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* LA MAGIA: Mantiene la proporción sin estirar */
+.file-preview-image {
+    object-fit: cover !important; /* Llena el espacio cortando excesos, NO estira */
+    object-position: center top !important; /* Centra la cara del conductor */
+}
+
+/* Quita bordes y sombras innecesarias que ensanchan el frame */
+.file-preview-frame {
+    border: none !important;
+    box-shadow: none !important;
+    display: block !important;
+    float: none !important;
+}
+
+.file-preview {
+    border: 1px solid #ddd !important;
+    border-radius: 0px !important; /* Modal cuadrado */
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Oculta los iconos de borrar/zoom que a veces mueven la imagen */
+.file-thumbnail-footer {
+    display: none !important;
+}
