@@ -167,7 +167,7 @@ $variablesAdicionales = (new \yii\db\Query())
     
     <div class="row">
         <div class="col-md-4">
-            <?= $form->field($model, 'id_forma_pago')->widget(Select2::classname(), [
+            <?= $form->field($model, 'id_forma_pago')->widget(Select2::class, [
                 'data' => $dataFormaPago,
                 'options' => ['placeholder' => 'Seleccione forma de pago...'],
                 'pluginOptions' => ['allowClear' => true],
@@ -178,7 +178,7 @@ $variablesAdicionales = (new \yii\db\Query())
             <?= $form->field($model, 'monto_base', ['enableClientValidation' => false])->textInput([
                 'id' => 'monto-base',
                 'style' => 'background: #FFFDE7; font-weight: bold; border-radius: 8px;'
-            ])->label('Monto Base ($)') ?>
+            ])->label('Monto  ($)') ?>
         </div>
 
         <div class="col-md-2">
@@ -186,6 +186,7 @@ $variablesAdicionales = (new \yii\db\Query())
                 'id' => 'monto-recargo',
                 'style' => 'color: #d32f2f; font-weight: bold; border-radius: 8px;'
             ])->label('Recargo ($)') ?>
+            
         </div>
 
         <div class="col-md-2">

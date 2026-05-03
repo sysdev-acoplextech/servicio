@@ -9,6 +9,10 @@ $dataPasajeros = ArrayHelper::map(Pasajero::find()->all(), 'id_pasajero', 'nombr
 $urlRutas = Url::to(['servicios/get-rutas-pasajero']);
 $urlDatosPasajero = Url::to(['servicios/get-datos-pasajero']); 
 
+// Si hay pasajeros guardados los usamos, de lo contrario inicializamos una fila vacía
+$pasajerosArray = !empty($pasajerosGuardados) ? $pasajerosGuardados : [new \backend\models\PasajeroServicio()];
+$totalPasajerosInicial = count($pasajerosArray);
+
 $this->registerCss("
     .pasajero-row { 
         background: #F1F5F9; 
@@ -52,73 +56,96 @@ $this->registerCss("
         <i class="fa fa-users"></i> Listado de Pasajeros
     </h4>
 
-    <div class="pasajero-row" id="p-row-0">
-        <div class="row">
-            <div class="col-md-3">
-                <label class="control-label">Pasajero</label>
-                <?= Select2::widget([
-                    'name' => 'Pasajeros[0][id_pasajero]',
-                    'data' => $dataPasajeros,
-                    'options' => [
-                        'placeholder' => 'Buscar...',
-                        'class' => 'select-pasajero-ajax',
-                        'data-index' => 0,
-                        'id' => 's2-0'
-                    ],
-                    'pluginOptions' => [
-                        'allowClear' => true,
-                        'tags' => true,
-                        'tokenSeparators' => [',', ';'],
-                    ],
-                ]) ?>
+    <?php foreach ($pasajerosArray as $index => $ps): ?>
+        <div class="pasajero-row" id="p-row-<?= $index ?>">
+            <?php if ($index > 0): ?>
+                <button type="button" class="btn btn-remove" onclick="$('#p-row-<?= $index ?>').remove();">&times;</button>
+            <?php endif; ?>
+            
+            <div class="row">
+                <div class="col-md-3">
+                    <label class="control-label">Pasajero</label>
+                    <?php
+                    // Obtenemos el teléfono del pasajero actual si ya existe
+                    $telInicial = '';
+                    $esLectura = true;
+                    if (!empty($ps->id_pasajero)) {
+                        $pModel = Pasajero::findOne($ps->id_pasajero);
+                        if ($pModel) {
+                            $telInicial = $pModel->telefono;
+                        }
+                    } else {
+                        // Si es una fila inicial para un nuevo registro, se permite escribir desde el inicio
+                        $esLectura = false;
+                    }
+                    ?>
+                    <?= Select2::widget([
+                        'name' => "Pasajeros[{$index}][id_pasajero]",
+                        'data' => $dataPasajeros,
+                        'value' => $ps->id_pasajero ?? '',
+                        'options' => [
+                            'placeholder' => 'Buscar...',
+                            'class' => 'select-pasajero-ajax',
+                            'data-index' => $index,
+                            'id' => "s2-{$index}"
+                        ],
+                        'pluginOptions' => [
+                            'allowClear' => true,
+                            'tags' => true,
+                            'tokenSeparators' => [',', ';'],
+                        ],
+                    ]) ?>
+                </div>
+                <div class="col-md-2">
+                    <label class="control-label">Teléfono</label>
+                    <?= Html::textInput("Pasajeros[{$index}][telefono]", $telInicial, [
+                        'id' => "telefono-{$index}",
+                        'class' => 'form-control campo-telefono-pasajero', 
+                        'placeholder' => 'Ej: 0412...',
+                        'maxlength' => 11,
+                        'readonly' => $esLectura,
+                        'style' => 'border-radius: 8px;' . ($esLectura ? ' background: #f8f9fa;' : ' background: #ffffff;')
+                    ]) ?>
+                </div>
+                <div class="col-md-3">
+                    <label class="control-label">Ruta Origen</label>
+                    <?= Html::textInput("Pasajeros[{$index}][origen]", $ps->origen ?? '', [
+                        'id' => "origen-{$index}",
+                        'class' => 'form-control', 
+                        'style' => 'border-radius: 8px;'
+                    ]) ?>
+                </div>
+                <div class="col-md-4">
+                    <label class="control-label">Ruta Destino</label>
+                    <?= Html::textInput("Pasajeros[{$index}][destino]", $ps->destino ?? '', [
+                        'id' => "destino-{$index}",
+                        'class' => 'form-control', 
+                        'style' => 'border-radius: 8px;'
+                    ]) ?>
+                </div>
             </div>
-            <div class="col-md-2">
-                <label class="control-label">Teléfono</label>
-                <?= Html::textInput('Pasajeros[0][telefono]', '', [
-                    'id' => 'telefono-0',
-                    'class' => 'form-control', 
-                    'placeholder' => 'Ej: 0412...',
-                    'style' => 'border-radius: 8px;'
-                ]) ?>
-            </div>
-            <div class="col-md-3">
-                <label class="control-label">Ruta Origen</label>
-                <?= Html::textInput('Pasajeros[0][origen]', '', [
-                    'id' => 'origen-0',
-                    'class' => 'form-control', 
-                    'style' => 'border-radius: 8px;'
-                ]) ?>
-            </div>
-            <div class="col-md-4">
-                <label class="control-label">Ruta Destino</label>
-                <?= Html::textInput('Pasajeros[0][destino]', '', [
-                    'id' => 'destino-0',
-                    'class' => 'form-control', 
-                    'style' => 'border-radius: 8px;'
-                ]) ?>
-            </div>
-        </div>
 
-        <div class="row" style="margin-top: 10px;">
-            <div class="col-md-9">
-                <label class="control-label"><i class="fa fa-map-marker" style="color: #db4437;"></i> Enlace Google Maps</label>
-                <?= Html::textInput('Pasajeros[0][google_map]', '', [
-                    'id' => 'google_map-0',
-                    'class' => 'form-control', 
-                    'placeholder' => 'Pegue el link aquí...',
-                    'style' => 'border-radius: 8px; border-left: 3px solid #db4437;'
-                ]) ?>
+            <div class="row" style="margin-top: 10px;">
+                <div class="col-md-9">
+                    <label class="control-label"><i class="fa fa-map-marker" style="color: #db4437;"></i> Enlace Google Maps</label>
+                    <?= Html::textInput("Pasajeros[{$index}][google_map]", $ps->google_map ?? '', [
+                        'id' => "google_map-{$index}",
+                        'class' => 'form-control', 
+                        'placeholder' => 'Pegue el link aquí...',
+                        'style' => 'border-radius: 8px; border-left: 3px solid #db4437;'
+                    ]) ?>
+                </div>
+                <div class="col-md-3">
+                    <label class="control-label">Hora</label>
+                    <?= Html::input('time', "Pasajeros[{$index}][hora]", $ps->hora ?? '', [
+                        'class' => 'form-control campo-hora-dinamico',
+                        'style' => 'border-radius: 8px;'
+                    ]) ?>
+                </div>
             </div>
-            <div class="col-md-3">
-                <label class="control-label">Hora</label>
-                <?= Html::input('time', 'Pasajeros[0][hora]', '', [
-                    'class' => 'form-control campo-hora-dinamico',
-                    'style' => 'border-radius: 8px;'
-                ]) ?>
-            </div>
+            <div id="rutas-recientes-<?= $index ?>" style="margin-top: 5px;"></div>
         </div>
-        <div id="rutas-recientes-0" style="margin-top: 5px;"></div>
-    </div>
+    <?php endforeach; ?>
 </div>
 
 <div class="add-pasajero-container" id="btn-add-pasajero">
@@ -129,53 +156,63 @@ $this->registerCss("
 
 <?php
 $this->registerJs("
-    var pasajeroIndex = 1;
+    var pasajeroIndex = {$totalPasajerosInicial};
 
     window.setRuta = function(index, origen, destino) {
         $('#origen-' + index).val(origen);
         $('#destino-' + index).val(destino);
     };
 
-    // EVENTO PRINCIPAL: Se dispara al seleccionar un pasajero de la lista
+    // Validar en tiempo real que solo se ingresen números
+    $(document).on('input', '.campo-telefono-pasajero', function() {
+        this.value = this.value.replace(/[^0-9]/g, '');
+    });
+
     $(document).on('select2:select', '.select-pasajero-ajax', function(e) {
         var idPasajero = e.params.data.id;
         var index = $(this).data('index');
         var containerRutas = $('#rutas-recientes-' + index);
         var inputTelefono = $('#telefono-' + index);
 
-        // Si es un ID numérico (pasajero existente)
-        if (idPasajero && !isNaN(idPasajero)) {
-            // 1. Obtener Rutas
-            $.get('{$urlRutas}', {id: idPasajero}, function(data) {
-                var rutas = (typeof data === 'string') ? JSON.parse(data) : data;
-                containerRutas.empty();
-                if (rutas.length > 0) {
-                    containerRutas.append('<div style=\"font-size:11px; color:#666; margin-bottom:5px;\">Rutas frecuentes:</div>');
-                    rutas.forEach(function(r) {
-                        containerRutas.append(`<span class='ruta-sugerida' onclick='setRuta(\${index}, \"\${r.origen}\", \"\${r.destino}\")'>\${r.origen} <i class='fa fa-arrow-right'></i> \${r.destino}</span>`);
-                    });
-                }
-            });
+        if (idPasajero) {
+            if (!isNaN(idPasajero)) {
+                // Pasajero existente: deshabilitamos escritura manual
+                inputTelefono.prop('readonly', true)
+                             .css({'background': '#f8f9fa'});
 
-            // 2. Obtener Datos del Pasajero (Teléfono)
-            $.get('{$urlDatosPasajero}', {id: idPasajero}, function(res) {
-                if(res.success) {
-                    inputTelefono.val(res.telefono);
-                    inputTelefono.css('background-color', '#e8f5e9'); // Feedback visual verde
-                    setTimeout(() => inputTelefono.css('background-color', ''), 1000);
-                }
-            });
-        } else {
-            // Es un tag nuevo, limpiar teléfono para ingreso manual
-            inputTelefono.val('').focus();
-            containerRutas.empty();
+                $.get('{$urlRutas}', {id: idPasajero}, function(data) {
+                    var rutas = (typeof data === 'string') ? JSON.parse(data) : data;
+                    containerRutas.empty();
+                    if (rutas.length > 0) {
+                        containerRutas.append('<div style=\"font-size:11px; color:#666; margin-bottom:5px;\">Rutas frecuentes:</div>');
+                        rutas.forEach(function(r) {
+                            containerRutas.append(`<span class='ruta-sugerida' onclick='setRuta(\${index}, \"\${r.origen}\", \"\${r.destino}\")'>\${r.origen} <i class='fa fa-arrow-right'></i> \${r.destino}</span>`);
+                        });
+                    }
+                });
+
+                $.get('{$urlDatosPasajero}', {id: idPasajero}, function(res) {
+                    if(res.success) {
+                        inputTelefono.val(res.telefono);
+                        inputTelefono.css('background-color', '#e8f5e9');
+                        setTimeout(() => inputTelefono.css('background-color', '#f8f9fa'), 1000);
+                    }
+                });
+            } else {
+                // Pasajero nuevo escrito a mano: habilitamos campo de teléfono
+                inputTelefono.prop('readonly', false)
+                             .css({'background': '#ffffff'})
+                             .val('')
+                             .attr('placeholder', 'Ej: 0412...')
+                             .focus();
+                containerRutas.empty();
+            }
         }
     });
 
-    // Limpiar al deseleccionar
     $(document).on('select2:unselect', '.select-pasajero-ajax', function() {
         var index = $(this).data('index');
-        $('#telefono-' + index).val('');
+        $('#telefono-' + index).val('').prop('readonly', true).css({'background': '#f8f9fa'});
         $('#rutas-recientes-' + index).empty();
     });
 
@@ -198,7 +235,7 @@ $this->registerJs("
                     </div>
                     <div class='col-md-2'>
                         <label class='control-label'>Teléfono</label>
-                        <input type='text' name='Pasajeros[\${pasajeroIndex}][telefono]' id='telefono-\${pasajeroIndex}' class='form-control' style='border-radius: 8px;' placeholder='Ej: 0412...'>
+                        <input type='text' name='Pasajeros[\${pasajeroIndex}][telefono]' id='telefono-\${pasajeroIndex}' class='form-control campo-telefono-pasajero' style='border-radius: 8px; background: #f8f9fa;' readonly maxlength='11' placeholder='Ej: 0412...'>
                     </div>
                     <div class='col-md-3'>
                         <label class='control-label'>Ruta Origen</label>
@@ -224,7 +261,6 @@ $this->registerJs("
 
         $('#pasajeros-container').append(newRow);
         
-        // Inicializar Select2 en la nueva fila
         $('#s2-' + pasajeroIndex).select2({ 
             width: '100%', 
             tags: true, 

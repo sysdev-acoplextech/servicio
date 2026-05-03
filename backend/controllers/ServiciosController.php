@@ -39,7 +39,7 @@ class ServiciosController extends Controller
     {
         return [
             'verbs' => [
-                'class' => VerbFilter::className(),
+                'class' => VerbFilter::class,
                 'actions' => [
                     'delete' => ['POST'],
                 ],
@@ -678,13 +678,35 @@ class ServiciosController extends Controller
                 $transaction = Yii::$app->db->beginTransaction();
                 
                 try {
+                    // 1. GESTIÓN DE NUEVO CLIENTE (Step 1)
+                    if (!empty($model->id_cliente) && !is_numeric($model->id_cliente)) {
+                        $nuevoCliente = new \backend\models\Cliente();
+                        $nuevoCliente->nombre_apellido = $model->id_cliente;
+                        
+                        // Ajustado al nombre exacto de tu columna en la base de datos
+                        $nuevoCliente->telefono_principal = !empty($postData['ClienteNuevo']['telefono']) 
+                            ? $postData['ClienteNuevo']['telefono'] 
+                            : '0000';
+                        
+                        $nuevoCliente->id_tipo_cliente = 0; // Activo por defecto
+
+                        if (!$nuevoCliente->save()) {
+                            throw new \Exception("Error al crear el cliente: " . implode(', ', $nuevoCliente->getFirstErrors()));
+                        }
+
+                        // Asignamos el ID del cliente recién creado al modelo de servicios
+                        $model->id_cliente = $nuevoCliente->id_cliente;
+                    }
+
                     // CORRECCIÓN ID_CLIENTE: Si viene un proyecto del Step 1
                     if (!empty($postData['cliente_proyecto_id'])) {
                         $model->id_cliente = $postData['cliente_proyecto_id'];
                     }
 
-                    // LIMPIEZA DE MONTOS (Quitar puntos de miles y cambiar coma por punto decimal)
-                    $model->monto = str_replace(',', '.', str_replace('.', '', $model->monto));
+                    // LIMPIEZA DE MONTOS
+                    if (!empty($model->monto)) {
+                        $model->monto = str_replace(',', '.', str_replace('.', '', $model->monto));
+                    }
                     
                     // Mapeo manual de viáticos a la columna de la base de datos
                     $viaticosRaw = $postData['Servicios']['viaticos'] ?? '0';
@@ -696,12 +718,11 @@ class ServiciosController extends Controller
                     $model->id_estatus = $model->id_estatus ?: 5; // Por defecto Agendado
 
                     if (!$model->save()) {
-                        // Si falla el servicio, mostramos el error específico
                         $error = current($model->getFirstErrors());
                         throw new \Exception("Error en Servicio: " . $error);
                     }
 
-                    // 3. GUARDAR PASAJEROS
+                    // 3. GUARDAR PASAJEROS (Step 2)
                     if (!empty($postData['Pasajeros'])) {
                         foreach ($postData['Pasajeros'] as $index => $data) {
                             if (empty($data['id_pasajero'])) continue;
@@ -710,24 +731,39 @@ class ServiciosController extends Controller
                             $ps->id_servicio = $model->id_servicio;
                             $ps->fecha = $model->fecha_servicio;
 
-                            // Si es nuevo pasajero (texto)
+                            // Si es nuevo pasajero (el usuario escribió texto en el Select2)
                             if (!is_numeric($data['id_pasajero'])) {
                                 $nuevoP = new \backend\models\Pasajero();
                                 $nuevoP->nombre_apellido = $data['id_pasajero'];
-                                $nuevoP->telefono = '0000'; 
-                                if(!$nuevoP->save()) throw new \Exception("Error creando pasajero: " . current($nuevoP->getFirstErrors()));
+                                
+                                // Capturamos el teléfono del pasajero que viaja en el array del Step 2
+                                $nuevoP->telefono = !empty($data['telefono']) ? $data['telefono'] : '0000'; 
+                                
+                                if (!$nuevoP->save()) {
+                                    throw new \Exception("Error creando pasajero: " . current($nuevoP->getFirstErrors()));
+                                }
                                 $ps->id_pasajero = $nuevoP->id_pasajero;
                             } else {
+                                // Si el pasajero ya existe, guardamos su ID
                                 $ps->id_pasajero = $data['id_pasajero'];
+                                
+                                // OPCIONAL: Si quieres actualizar el teléfono del pasajero existente si viene uno nuevo
+                                if (!empty($data['telefono'])) {
+                                    $pExistente = \backend\models\Pasajero::findOne($data['id_pasajero']);
+                                    if ($pExistente && $pExistente->telefono !== $data['telefono']) {
+                                        $pExistente->telefono = $data['telefono'];
+                                        $pExistente->save(false); // Guardar sin validar para agilizar
+                                    }
+                                }
                             }
 
                             $ps->origen = $data['origen'] ?? 'N/A';
                             $ps->destino = $data['destino'] ?? 'N/A';
                             $ps->hora = $data['hora'] ?? date('H:i');
+                            $ps->google_map = $data['google_map'] ?? null;
                             
                             if (!$ps->save()) {
-                                // Esto te dirá EXACTAMENTE qué campo de la tabla pasajero_servicio falta
-                                $msg = "Error en Pasajero ".($index+1).": " . implode(', ', $ps->getFirstErrors());
+                                $msg = "Error en Pasajero " . ($index + 1) . ": " . implode(', ', $ps->getFirstErrors());
                                 throw new \Exception($msg);
                             }
                         }
@@ -737,14 +773,16 @@ class ServiciosController extends Controller
                     if (isset($postData['Servicios']['adicionales'])) {
                         foreach ($postData['Servicios']['adicionales'] as $id_var) {
                             $montoV = (new \yii\db\Query())->select(['monto'])->from('lista_precio')
-                                    ->where(['id_variable' => $id_var])->scalar() ?: 0;
+                                        ->where(['id_variable' => $id_var])->scalar() ?: 0;
 
                             $sa = new \backend\models\ServicioVariables();
                             $sa->id_servicio = $model->id_servicio;
                             $sa->id_variable_servicio = $id_var;
                             $sa->monto = $montoV;
                             $sa->cantidad = 1;
-                            if (!$sa->save()) throw new \Exception("Error en Adicional");
+                            if (!$sa->save()) {
+                                throw new \Exception("Error en Adicional");
+                            }
                         }
                     }
 
@@ -760,6 +798,7 @@ class ServiciosController extends Controller
         return $this->render('create', ['model' => $model]);
     }
 
+    /////// REVISAR FUNCION/////////////////////////////
     public function actionGetPrecioRuta($id_detalle, $tipo_vehiculo)
     {
         Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
@@ -779,7 +818,6 @@ class ServiciosController extends Controller
         
         return ['success' => false, 'monto' => 0, 'viatico' => 0];
     }
-
 
     public function actionCreateproyecto()
     {
@@ -1373,26 +1411,6 @@ class ServiciosController extends Controller
             ]);
         }
     }
-
-    public function actionUpdate($id)
-    {
-        $model = $this->findModel($id);
-        $model2 = VServicios::find()->where(['id_servicio' => $id])
-        ->one();
-        $model3 = PasajeroServicio::find()->where(['id_servicio' => $id])
-        ->one();
-
-        if ($model->load(Yii::$app->request->post()) && $model->save()) {
-            return $this->redirect(['view', 'id' => $model->id_servicio]);
-        }
-
-        return $this->render('update', [
-            'model' => $model,
-            'model2' => $model2,
-            'model3' => $model3,
-        ]);
-    }
-
  
     public function actionDelete($id)
     {
@@ -1818,4 +1836,161 @@ class ServiciosController extends Controller
         ]);
     }
 
+    public function actionCotizacionRapida()
+    {
+        $model = new Servicios();
+        $model->id_estatus = 12; // Estatus fijo: Cotización/Por confirmar
+
+        if ($this->request->isPost) {
+            $postData = $this->request->post();
+            if ($model->load($postData)) {
+                // Limpieza de montos como ya sabemos hacer
+                $model->monto = str_replace(',', '.', str_replace('.', '', $model->monto));
+                $model->total_viatico = str_replace(',', '.', str_replace('.', '', $postData['Servicios']['viaticos'] ?? '0'));
+                
+                $model->id_usuario = Yii::$app->user->identity->id;
+                $model->fecha_registro = date('Y-m-d');
+                
+                if ($model->save()) {
+                    // Guardar las variables seleccionadas en servicio_variables
+                    if (isset($postData['variables_cotizacion'])) {
+                        foreach ($postData['variables_cotizacion'] as $id_var) {
+                            $sv = new ServicioVariables();
+                            $sv->id_servicio = $model->id_servicio;
+                            $sv->id_variable_servicio = $id_var;
+                            $sv->monto = $this->obtenerMontoVariable($id_var); // Función auxiliar
+                            $sv->cantidad = 1;
+                            $sv->save();
+                        }
+                    }
+                    Yii::$app->session->setFlash('success', "Cotización #{$model->id_servicio} generada.");
+                    return $this->redirect(['index-cotizaciones']);
+                }
+            }
+        }
+
+        return $this->render('cotizacion_rapida', ['model' => $model]);
+    }
+
+   public function actionUpdate($id)
+    {
+        $model = $this->findModel($id);
+        
+        // 1. Obtener los adicionales guardados para calcular la base real
+        $adicionalesModelos = \backend\models\ServicioVariables::find()
+            ->where(['id_servicio' => $id])
+            ->all();
+
+        $sumaAdicionales = 0;
+        $adicionalesGuardados = [];
+        foreach ($adicionalesModelos as $relacion) {
+            $sumaAdicionales += (float)$relacion->monto;
+            $adicionalesGuardados[] = $relacion->id_variable_servicio;
+        }
+
+        // 2. Calcular la Base Real: Total - Recargo - Viáticos - Adicionales
+        $baseCalculada = (float)$model->monto - (float)$model->monto_recargo - (float)$model->total_viatico - $sumaAdicionales;
+
+        // 3. Asignar formatos para la vista (Separadores de miles punto, decimal coma)
+        $model->monto_base = number_format($baseCalculada, 2, ',', '.');
+        $model->monto_recargo = number_format($model->monto_recargo, 2, ',', '.');
+        $model->viaticos = number_format($model->total_viatico, 2, ',', '.');
+
+        // --- NUEVO: Obtener los pasajeros ya guardados para este servicio ---
+        $pasajerosGuardados = \backend\models\PasajeroServicio::find()
+            ->where(['id_servicio' => $id])
+            ->all();
+
+        if ($this->request->isPost && $model->load($this->request->post())) {
+            $transaction = Yii::$app->db->beginTransaction();
+            try {
+                $postData = $this->request->post();
+
+                if (!empty($postData['cliente_proyecto_id'])) {
+                    $model->id_cliente = $postData['cliente_proyecto_id'];
+                }
+
+                // Limpieza de formatos antes de guardar
+                $model->monto = str_replace(',', '.', str_replace('.', '', $model->monto));
+                $model->monto_recargo = str_replace(',', '.', str_replace('.', '', $model->monto_recargo));
+                
+                $viaticosRaw = $postData['Servicios']['viaticos'] ?? '0';
+                $model->total_viatico = str_replace(',', '.', str_replace('.', '', $viaticosRaw));
+
+                if (!$model->save()) {
+                    $error = current($model->getFirstErrors());
+                    throw new \Exception("Error en Servicio: " . $error);
+                }
+
+                // Actualizar pasajeros (Borrar anteriores y guardar nuevos)
+                \backend\models\PasajeroServicio::deleteAll(['id_servicio' => $model->id_servicio]);
+
+                if (!empty($postData['Pasajeros'])) {
+                    foreach ($postData['Pasajeros'] as $index => $data) {
+                        if (empty($data['id_pasajero'])) continue;
+
+                        $ps = new \backend\models\PasajeroServicio();
+                        $ps->id_servicio = $model->id_servicio;
+                        $ps->fecha = $model->fecha_servicio;
+
+                        if (!is_numeric($data['id_pasajero'])) {
+                            $nuevoP = new \backend\models\Pasajero();
+                            $nuevoP->nombre_apellido = $data['id_pasajero'];
+                            $nuevoP->telefono = '0000'; 
+                            if(!$nuevoP->save()) {
+                                throw new \Exception("Error creando pasajero: " . current($nuevoP->getFirstErrors()));
+                            }
+                            $ps->id_pasajero = $nuevoP->id_pasajero;
+                        } else {
+                            $ps->id_pasajero = $data['id_pasajero'];
+                        }
+
+                        $ps->origen = $data['origen'] ?? 'N/A';
+                        $ps->destino = $data['destino'] ?? 'N/A';
+                        $ps->hora = $data['hora'] ?? date('H:i');
+                        
+                        if (!$ps->save()) {
+                            $msg = "Error en Pasajero ".($index+1).": " . implode(', ', $ps->getFirstErrors());
+                            throw new \Exception($msg);
+                        }
+                    }
+                }
+
+                // Actualizar adicionales (Borrar anteriores y guardar nuevos)
+                \backend\models\ServicioVariables::deleteAll(['id_servicio' => $model->id_servicio]);
+
+                if (isset($postData['Servicios']['adicionales'])) {
+                    foreach ($postData['Servicios']['adicionales'] as $id_var) {
+                        $montoV = (new \yii\db\Query())->select(['monto'])->from('lista_precio')
+                            ->where(['id_variable' => $id_var])->scalar() ?: 0;
+
+                        $sa = new \backend\models\ServicioVariables();
+                        $sa->id_servicio = $model->id_servicio;
+                        $sa->id_variable_servicio = $id_var;
+                        $sa->monto = $montoV;
+                        $sa->cantidad = 1;
+                        
+                        if (!$sa->save()) {
+                            throw new \Exception("Error en Adicional");
+                        }
+                    }
+                }
+
+                $transaction->commit();
+                return $this->redirect(['view', 'id' => $model->id_servicio]);
+
+            } catch (\Exception $e) {
+                $transaction->rollBack();
+                Yii::$app->session->setFlash('error', $e->getMessage());
+            }
+        }
+
+        return $this->render('update', [
+            'model' => $model,
+            'variablesAdicionales' => \backend\models\VariablesServicio::find()->all(),
+            'adicionalesGuardados' => $adicionalesGuardados,
+            'adicionalesModelos' => $adicionalesModelos,
+            'pasajerosGuardados' => $pasajerosGuardados, // Pasamos los pasajeros actuales a la vista
+        ]);
+    }
 }

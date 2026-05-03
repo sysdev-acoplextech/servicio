@@ -39,9 +39,10 @@ class Servicios extends \yii\db\ActiveRecord
 
     // PROPIEDADES PARA EL CÁLCULO DE TARIFARIO (STEP 3)
     public $monto_base;
-    public $monto_recargo;
     public $viaticos;
     public $monto_total;
+
+    public $cliente_proyecto_id;
 
 
     public static function tableName()
@@ -59,7 +60,7 @@ class Servicios extends \yii\db\ActiveRecord
        return [
         [['fecha_servicio', 'id_cliente', 'id_tipo_vehiculo', 'monto', 'id_tipo_traslado_ruta'], 'required'],
         [['id_tipo_vehiculo', 'id_tipo_traslado_ruta', 'id_conductor', 'id_flota', 'id_estatus', 'id_usuario', 'id_tipo_ruta', 'id_forma_pago', 'facturado', 'tipo_servicio'], 'integer'],
-        [['fecha_registro', 'fecha_servicio', 'monto_base', 'monto_recargo', 'viaticos', 'monto_total', 'total_viatico', 'flota_conductor'], 'safe'],
+        [['fecha_registro', 'fecha_servicio', 'monto_base', 'monto_recargo', 'viaticos', 'monto_total', 'total_viatico', 'flota_conductor','cliente_proyecto_id'], 'safe'],
         [['faltante'], 'number'],
         [['observacion_inicial'], 'string', 'max' => 200],
         [['item_tipo_vehiculo', 'item_ruta', 'item_horario'], 'string'],
@@ -89,6 +90,7 @@ class Servicios extends \yii\db\ActiveRecord
             'id_tipo_ruta' => 'Tipo de ruta',
             'total_viatico' => 'Monto del Viático',
             'id_forma_pago' => 'Forma de pago',
+            'monto_recargo' => 'Monto del Recargo',
 
         ];
     }
@@ -112,5 +114,11 @@ class Servicios extends \yii\db\ActiveRecord
         // Cambia 'Estatus' por el nombre de tu modelo de estados
         // y 'id_estatus' por la columna que los une
         return $this->hasOne(Estatus::class, ['id_estatus' => 'id_estatus']);
+    }
+
+    public function getServicioAdicionales()
+    {
+        // Esto conecta el Servicio con la tabla intermedia de variables/adicionales
+        return $this->hasMany(ServicioVariables::class, ['id_servicio' => 'id_servicio']);
     }
 }

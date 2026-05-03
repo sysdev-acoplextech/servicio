@@ -10,6 +10,7 @@ use backend\models\TipoTrasladoRuta;
 
 // Cargamos la data necesaria
 $dataClientes = ArrayHelper::map(Cliente::find()->all(), 'id_cliente', 'nombre_apellido');
+$hoy = date('Y-m-d');
 
 $dataRutas = ArrayHelper::map(
     TipoTrasladoRuta::find()->where(['estatus' => 1])->all(), 
@@ -39,7 +40,7 @@ $urlProyectos = Url::to(['servicios/get-proyectos']);
         ) ?>
     </div>
     <div class="col-md-4">
-        <?= $form->field($model, 'fecha_servicio')->input('date', ['style' => 'border-radius:8px;']) ?>
+        <?= $form->field($model, 'fecha_servicio')->input('date', ['style' => 'border-radius:8px; ', 'min' => $hoy,]) ?>
     </div>
 </div>
 
@@ -62,7 +63,8 @@ $urlProyectos = Url::to(['servicios/get-proyectos']);
     </div>
     <div class="col-md-3">
         <label>Teléfono de Contacto</label>
-        <input type="text" id="info-telefono" class="form-control" readonly 
+        <input type="text" id="info-telefono" name="ClienteNuevo[telefono]" class="form-control" readonly 
+               maxlength="11"
                style="border-radius:8px; background:#f8f9fa; font-weight: bold; border: 1px solid #d2d6de;"
                placeholder="Automático...">
     </div>
@@ -81,9 +83,9 @@ $urlProyectos = Url::to(['servicios/get-proyectos']);
     <div class="col-md-6">
         <label class="control-label">Cliente Asociado al proyecto</label>
         <?= Select2::widget([
-            'name' => 'cliente_proyecto_id', // Nombre diferente para que no sobreescriba id_cliente
+            'name' => 'cliente_proyecto_id', 
             'id' => 'select-proyecto',
-            'data' => [], // Se llena por AJAX
+            'data' => [], 
             'options' => ['placeholder' => 'Seleccione el proyecto...'],
             'pluginOptions' => ['allowClear' => true, 'width' => '100%'],
         ]); ?>
@@ -102,48 +104,72 @@ $urlProyectos = Url::to(['servicios/get-proyectos']);
 
 <?php
 $this->registerJs("
+// Bloquear escritura no numérica en tiempo real para el teléfono
+$('#info-telefono').on('input', function() {
+    this.value = this.value.replace(/[^0-9]/g, '');
+});
+
 $('#select-cliente').on('change', function() {
     var val = $(this).val();
     var containerProyecto = $('#container-proyecto');
     var selectProyecto = $('#select-proyecto');
+    var inputTelefono = $('#info-telefono');
 
-    if (val && !isNaN(val)) {
-        // Cargar Proyectos
-        $.ajax({
-            url: '{$urlProyectos}',
-            type: 'GET',
-            data: {id: val},
-            dataType: 'json',
-            success: function(data) {
-                selectProyecto.empty().append('<option value=\"\">Seleccione...</option>');
-                if (data && data.length > 0) {
-                    $.each(data, function(i, item) {
-                        selectProyecto.append($('<option>', { value: item.id, text: item.text }));
-                    });
-                    containerProyecto.slideDown(); // Se despliega hacia abajo
-                } else {
-                    containerProyecto.slideUp();
-                    selectProyecto.val(null).trigger('change');
-                }
-            }
-        });
+    if (val) {
+        if (isNaN(val)) {
+            // Cliente NUEVO escrito a mano
+            inputTelefono.prop('readonly', false)
+                         .css({'background': '#ffffff', 'border': '1px solid #ccd0d4'})
+                         .val('')
+                         .attr('placeholder', 'Ej: 04121234567')
+                         .focus();
+            
+            containerProyecto.slideUp();
+            $('#alert-no-grato').slideUp();
+        } else {
+            // Cliente existente
+            inputTelefono.prop('readonly', true)
+                         .css({'background': '#f8f9fa', 'border': '1px solid #d2d6de'})
+                         .attr('placeholder', 'Automático...');
 
-        // Cargar Info básica
-        $.ajax({
-            url: '{$urlInfo}',
-            type: 'GET',
-            data: {id: val},
-            success: function(data) {
-                if (data.success) {
-                    $('#info-telefono').val(data.telefono);
-                    if (data.grato == 1) $('#alert-no-grato').slideDown();
-                    else $('#alert-no-grato').slideUp();
+            $.ajax({
+                url: '{$urlProyectos}',
+                type: 'GET',
+                data: {id: val},
+                dataType: 'json',
+                success: function(data) {
+                    selectProyecto.empty().append('<option value=\"\">Seleccione...</option>');
+                    if (data && data.length > 0) {
+                        $.each(data, function(i, item) {
+                            selectProyecto.append($('<option>', { value: item.id, text: item.text }));
+                        });
+                        containerProyecto.slideDown();
+                    } else {
+                        containerProyecto.slideUp();
+                        selectProyecto.val(null).trigger('change');
+                    }
                 }
-            }
-        });
+            });
+
+            $.ajax({
+                url: '{$urlInfo}',
+                type: 'GET',
+                data: {id: val},
+                success: function(data) {
+                    if (data.success) {
+                        inputTelefono.val(data.telefono);
+                        if (data.grato == 1) $('#alert-no-grato').slideDown();
+                        else $('#alert-no-grato').slideUp();
+                    }
+                }
+            });
+        }
     } else {
         containerProyecto.slideUp();
-        $('#info-telefono').val('');
+        inputTelefono.prop('readonly', true)
+                     .css({'background': '#f8f9fa', 'border': '1px solid #d2d6de'})
+                     .val('')
+                     .attr('placeholder', 'Automático...');
         $('#alert-no-grato').slideUp();
     }
 });

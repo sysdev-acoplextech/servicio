@@ -88,6 +88,10 @@ $this->registerJs("
                 </div>
             </div>
             <div class="col-md-4 text-right">
+                <?= Html::a('<i class="fa fa-calculator"></i> CÁLCULO RÁPIDO', ['cotizacion-rapida/create'], [
+                    'class' => 'btn btn-info',
+                    'style' => 'border-radius:15px; padding: 10px 20px; font-weight:bold; background: #3B82F6; border:none; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);'
+                ]) ?>
                 <?= Html::a('<i class="fa fa-plus"></i> NUEVO SERVICIO', ['create'], [
                     'class' => 'btn btn-success',
                     'style' => 'border-radius:15px; padding: 10px 25px; font-weight:bold; background: #10B981; border:none;'
@@ -96,13 +100,12 @@ $this->registerJs("
         </div>
     </div>
 
+    <!-- VISTA TARJETAS -->
     <div id="view-grid" class="view-content">
         <div class="grid-servicios">
             <?php foreach ($dataProvider->getModels() as $model): 
-                // Evitamos errores buscando manualmente si no hay relación definida
                 $cli = Cliente::findOne($model->id_cliente);
                 $fp = FormaPago::findOne($model->id_forma_pago);
-                // Usamos id_estatus (columna real) en lugar de estatus (propiedad inexistente)
                 $esConfirmado = ($model->id_estatus == 2); 
             ?>
                 <div class="card-servicio">
@@ -127,8 +130,15 @@ $this->registerJs("
                             <span>Vehículo: <?= $model->id_tipo_vehiculo ?></span>
                         </div>
                         
-                        <div style="margin-top: 15px; display: flex; gap: 10px;">
-                            <?= Html::a('Ver Detalles', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-default btn-sm', 'style' => 'border-radius:10px; flex:1;']) ?>
+                        <div style="margin-top: 15px; display: flex; gap: 8px;">
+                            <?= Html::a('Ver', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-default btn-sm', 'style' => 'border-radius:10px; flex:1; font-weight:700;']) ?>
+                            
+                            <!-- BOTÓN MODIFICAR -->
+                            <?= Html::a('<i class="fa fa-pencil"></i>', ['update', 'id' => $model->id_servicio], [
+                                'class' => 'btn btn-info btn-sm', 
+                                'style' => 'border-radius:10px; background:#3B82F6; border:none; color:white; padding: 5px 12px;'
+                            ]) ?>
+                            
                             <?= Html::a('<i class="fa fa-whatsapp"></i>', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-success btn-sm', 'style' => 'border-radius:10px; background:#25D366; border:none;']) ?>
                         </div>
                     </div>
@@ -137,6 +147,7 @@ $this->registerJs("
         </div>
     </div>
 
+    <!-- VISTA LISTA -->
     <div id="view-list" class="view-content" style="display: none;">
         <div class="control-panel" style="padding: 0; overflow: hidden;">
             <table class="table" style="margin-bottom: 0;">
@@ -159,7 +170,9 @@ $this->registerJs("
                             <td><?= FormaPago::findOne($model->id_forma_pago)->descripcion ?? 'N/A' ?></td>
                             <td class="text-right"><b>$ <?= number_format($model->monto, 2, ',', '.') ?></b></td>
                             <td class="text-right">
-                                <?= Html::a('<i class="fa fa-eye"></i>', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-xs btn-default']) ?>
+                                <?= Html::a('<i class="fa fa-eye"></i>', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-xs btn-default', 'style' => 'border-radius:8px;']) ?>
+                                <!-- BOTÓN MODIFICAR EN LISTA -->
+                                <?= Html::a('<i class="fa fa-pencil"></i>', ['update', 'id' => $model->id_servicio], ['class' => 'btn btn-xs btn-info', 'style' => 'border-radius:8px; margin-left:5px;']) ?>
                             </td>
                         </tr>
                     <?php endforeach; ?>
