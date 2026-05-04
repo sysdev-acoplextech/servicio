@@ -48,6 +48,13 @@ $this->registerCss("
     .card-info-row i { color: #EA4C2D; width: 15px; }
 
     #calendar { background: #fff; padding: 20px; border-radius: 20px; border: 1px solid #E2E8F0; }
+    .btn-filter-dropdown {
+        border-radius: 15px; padding: 10px 20px; font-weight: bold; 
+        background: #F1F5F9; border: 1px solid #E2E8F0; color: #64748B;
+    }
+    .btn-filter-dropdown:hover { background: #E2E8F0; }
+    .dropdown-menu { border-radius: 15px; border: none; box-shadow: 0 10px 25px rgba(0,0,0,0.1); padding: 10px; }
+    .dropdown-menu > li > a { border-radius: 8px; padding: 8px 20px; font-weight: 600; }
 ");
 
 $this->registerJs("
@@ -88,6 +95,21 @@ $this->registerJs("
                 </div>
             </div>
             <div class="col-md-4 text-right">
+
+            <div class="dropdown" style="display: inline-block; margin-right: 5px;">
+                    <button class="btn btn-default dropdown-toggle btn-filter-dropdown" type="button" data-toggle="dropdown">
+                        <i class="fa fa-filter"></i> Filtrar <span class="caret"></span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-right">
+                        <li class="dropdown-header">ESTATUS</li>
+                        <li><?= Html::a('Todos los servicios', ['index']) ?></li>
+                        <li class="divider"></li>
+                        <li><?= Html::a('⭐ Hoy', ['index', 'ServiciosSearch[fecha_servicio]' => date('Y-m-d')]) ?></li>
+                        <li><?= Html::a('⏳ Agendados', ['index', 'ServiciosSearch[id_estatus]' => 5]) ?></li>
+                        <li><?= Html::a('✅ Confirmados', ['index', 'ServiciosSearch[id_estatus]' => 11]) ?></li>
+                        <li><?= Html::a('🔄 En Proceso', ['index', 'ServiciosSearch[id_estatus]' => 9]) ?></li>
+                    </ul>
+                </div>
                 <?= Html::a('<i class="fa fa-calculator"></i> CÁLCULO RÁPIDO', ['cotizacion-rapida/create'], [
                     'class' => 'btn btn-info',
                     'style' => 'border-radius:15px; padding: 10px 20px; font-weight:bold; background: #3B82F6; border:none; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);'
@@ -110,7 +132,7 @@ $this->registerJs("
             ?>
                 <div class="card-servicio">
                     <div class="card-tag <?= $esConfirmado ? 'tag-confirmado' : 'tag-pendiente' ?>">
-                        <?= $esConfirmado ? 'Confirmado' : 'Pendiente' ?>
+                        <?= $esConfirmado ? 'Confirmado' : 'Agendado' ?>
                     </div>
                     <div class="card-header-s">
                         <span class="card-id">#<?= $model->id_servicio ?></span>
