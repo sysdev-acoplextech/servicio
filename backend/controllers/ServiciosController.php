@@ -1287,129 +1287,94 @@ class ServiciosController extends Controller
         $model2 = new MovServicio();
         $model3 = new ServicioPago();
 
-        //Verificamos pagos anteriores
-        $pagos = ServicioPago::find()->where(['id_servicio' => $id])->all();
+        // Historial de pagos para calcular el faltante real anterior
+        $pagos = ServicioPago::find()
+            ->where(['id_servicio' => $id])
+            ->orderBy(['id_pago' => SORT_DESC])
+            ->all();
+        
+        // Si no hay pagos previos, el faltante inicial es el monto original del servicio
+        $faltante_anterior_divisas = (empty($pagos)) ? (float)$model->monto : (float)$pagos[0]->faltante;
 
         if ($model3->load(Yii::$app->request->post())) {
-
-
-            //Monto pagado en $
             $tasa = Tasadia::find()->where(['id_estatus' => TRUE])->one();
+            $postData = Yii::$app->request->post('ServicioPago');
 
-            switch ($_POST['ServicioPago']['id_tipo_moneda']) {
-                case '$':
-                    
-                    $pago_cambio= $_POST['ServicioPago']['monto'];
-                    break;
-                
-                default:
-                    //$pago_cambio = $_POST['ServicioPago']['monto'] / $tasa->valor;
-                    $pago_cambio = $_POST['ServicioPago']['monto'];
-                    $pago_al_cambio = $_POST['ServicioPago']['monto'] / $tasa->valor;
-                    break;
+            // Normalización de fecha
+            $fecha_pago = $postData['fecha_pago'];
+            $fecha_db = (strpos($fecha_pago, '/') !== false) 
+                ? implode("-", array_reverse(explode("/", $fecha_pago))) 
+                : $fecha_pago;
+
+            // Validación: No permitir fechas futuras
+            if (strtotime($fecha_db) > strtotime(date('Y-m-d'))) {
+                Yii::$app->session->setFlash('error', 'La fecha no puede ser una fecha futura.');
+                return $this->render('pagar', [
+                    'model' => $model, 'model2' => $model2, 'model3' => $model3, 'pagos' => $pagos,
+                ]);
             }
 
-            $pago_al_cambio=round($pago_al_cambio, 2);
-            $pago_cambio= round($pago_cambio, 2);
-            
-            // Verifica si la fecha es válida
-            if (strtotime($model3->fecha_pago) >= strtotime(date('Y-m-d'))) {
-                Yii::$app->session->setFlash('error', 'La fecha no puede ser fechas futuras.');
+            // Conversión de montos a divisas (base de cálculo)
+            $monto_ingresado = (float)$postData['monto'];
+            $pago_actual_divisas = ($postData['id_tipo_moneda'] === '$') 
+                ? $monto_ingresado 
+                : ($monto_ingresado / $tasa->valor);
+
+            // --- LÓGICA DE PRECISIÓN PARA ESTATUS ---
+            $nuevo_faltante = $faltante_anterior_divisas - $pago_actual_divisas;
+
+            // Si el remanente es menor o igual a 0.1, se marca como TOTAL
+            if ($nuevo_faltante <= 0.1) {
+                $estatus = 7; // Pagado Total
+                $desc_pago = "Total";
+                $faltante_final = 0; 
             } else {
-                //Verifico si es un pago total o parcial
-                $parcial = "";
-                $desc_pago = "";
-                $debe_pagar = 0;
-                $monto_pagar = $_POST['ServicioPago']['monto_pagar'];
-                
+                $estatus = 6; // Pago Parcial
+                $desc_pago = "Parcial";
+                $faltante_final = round($nuevo_faltante, 2);
+            }
 
-              
-                if ( ($pago_cambio) < ($monto_pagar) ) { 
-     
-                    $desc_pago = "Parcial";
-                    $estatus = 6;
-                    //Calculamos la diferencia
-                    $debe_pagar = $monto_pagar - $pago_cambio;
-                    $faltante_divisas = $debe_pagar / $tasa->valor;
-                    $faltante_divisas = round($faltante_divisas, 2);
+            // Configuración de origen y método
+            $banco_origen = ($postData['tipo_pago'] == 'Efectivo (Divisas)') ? 0 : ($postData['banco_origen'] ?? 0);
+            $id_metodo = ($postData['tipo_pago'] == 'Efectivo (Divisas)') ? 4 : $postData['id_metodo'];
 
-                   
-                }
-
-                if ($pago_cambio == $monto_pagar) {
-                    $desc_pago = "Total";
-                    $faltante_divisas =0;
-                    $estatus = 7;
-                }
-
-                if (($pago_cambio) > ($monto_pagar)) {
-                    $desc_pago = "Total";
-                    $faltante_divisas = 0;
-                    $estatus = 7;
-                }
-
-                if ($_POST['ServicioPago']['fecha_pago']) {
-                    $fecha = explode("/", $_POST['ServicioPago']['fecha_pago']);
-                    $fecha = $fecha[2] . "-" . $fecha[1] . "-" . $fecha[0];
-                } else {
-                    $fecha = date("Y-m-d");
-                }
-
-                if ($_POST['ServicioPago']['tipo_pago'] == 'Efectivo (Divisas)') {
-                    $tipo_pago = 0;
-                    $_POST['ServicioPago']['id_metodo'] = 4;
-                } else {
-                    $tipo_pago = $_POST['ServicioPago']['banco_origen'];
-                }
-
-                // Guarda el modelo aquí
-                $model3->id_servicio = $_POST['ServicioPago']['id_servicio'];
-                $model3->fecha_pago = $fecha;
-                $model3->monto = $_POST['ServicioPago']['monto'];
-                $model3->referencia = $_POST['ServicioPago']['referencia'];
-                $model3->tipo_pago = $_POST['ServicioPago']['tipo_pago'];
-                $model3->id_metodo = $_POST['ServicioPago']['id_metodo'];
-                $model3->id_tipo_moneda = $_POST['ServicioPago']['id_tipo_moneda'];
-                $model3->banco_origen = $tipo_pago;
-                $model3->observacion_pago = $_POST['ServicioPago']['observacion_pago'];
-                $model3->faltante = $faltante_divisas;
-                $model3->tasa = $tasa->valor;
-                $model3->ref_divisas = $pago_al_cambio;
-                $model3->id_usuario = Yii::$app->user->identity->id;
-                $model3->procedencia = 'Pago ' . $desc_pago . ' relacionado al Servicio Nro . ' . $_POST['ServicioPago']['id_servicio'] . " registrado por : " . Yii::$app->user->identity->username;
-                $model3->save(false);
-
-                //Registro del movimiento
-
-                $model2->id_servicio = $_POST['ServicioPago']['id_servicio'];
+            // Guardar en servicio_pago
+            $model3->attributes = $postData;
+            $model3->id_servicio = $id;
+            $model3->fecha_pago = $fecha_db;
+            $model3->id_metodo = $id_metodo;
+            $model3->banco_origen = $banco_origen;
+            $model3->faltante = $faltante_final;
+            $model3->tasa = $tasa->valor;
+            $model3->ref_divisas = round($pago_actual_divisas, 2);
+            $model3->id_usuario = Yii::$app->user->identity->id;
+            $model3->procedencia = "Pago $desc_pago relacionado al Servicio Nro. $id";
+            
+            if ($model3->save(false)) {
+                // 1. Registro de Movimiento
+                $model2->id_servicio = $id;
                 $model2->id_estatus = $estatus;
                 $model2->id_usuario = Yii::$app->user->identity->id;
-                $model2->observacion = "Pago " . $desc_pago . " del servicio nro " . $_POST['ServicioPago']['id_servicio'];
+                $model2->observacion = "Pago $desc_pago del servicio nro $id";
                 $model2->save(false);
 
+                // 2. Actualización de Servicio
+                \backend\models\Servicios::updateAll([
+                    'id_estatus' => $estatus,
+                    'faltante' => $faltante_final,
+                ], ['id_servicio' => $id]);
 
-                Servicios::updateAll(
-                    [
-
-                        'id_estatus' => $estatus,
-                        'faltante' => $faltante_divisas,
-
-                    ],
-                    'id_servicio= ' . $_POST['ServicioPago']['id_servicio']
-                );
-
-                \Yii::$app->getSession()->setFlash('success', '<center><h2><b>Registrado el pago</b></h2></center> ');
-
+                Yii::$app->session->setFlash('success', "Pago $desc_pago registrado correctamente.");
                 return $this->redirect(['index']);
             }
-        } else {
-            return $this->render('pagar', [
-                'model' => $model,
-                'model2' => $model2,
-                'model3' => $model3,
-                'pagos' => $pagos,
-            ]);
         }
+
+        return $this->render('pagar', [
+            'model' => $model,
+            'model2' => $model2,
+            'model3' => $model3,
+            'pagos' => $pagos,
+        ]);
     }
  
     public function actionDelete($id)

@@ -43,7 +43,7 @@ class ServiciosSearch extends Servicios
     public function search($params, $tipo = null)
     {
         // Definimos los estatus que queremos incluir por defecto en la vista principal
-        $idsAIncluir = [4, 5, 6, 7];
+        $idsAIncluir = [4, 5, 6, 7, 11];
         
         $query = Servicios::find()
             ->where(['in', 'id_estatus', $idsAIncluir])

@@ -49,6 +49,7 @@ $proyectoIdExistente = $model->cliente_proyecto_id ?? 'null';
         </div>
 
         <div class="form-group text-right">
+            <?= Html::a('CANCELAR', ['index'], ['class' => 'btn btn-default', 'style' => 'border-radius: 10px; padding: 10px 25px;']) ?>
             <?= Html::submitButton('<i class="fa fa-save"></i> GUARDAR CAMBIOS TOTALES', [
                 'class' => 'btn btn-success btn-lg',
                 'style' => 'border-radius: 30px; padding: 15px 50px; font-weight: bold; box-shadow: 0 4px 10px rgba(46, 204, 113, 0.3);'

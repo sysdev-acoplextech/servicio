@@ -1,430 +1,247 @@
 <?php
 
 use backend\models\BaseMetodosPago;
-use backend\models\Conductor;
-use backend\models\MovFlota;
-use backend\models\VConductores;
-use kartik\depdrop\DepDrop;
-use yii\helpers\Url;
-use backend\models\TipoRuta;
-use backend\models\TipoTrasladoRuta;
-use backend\models\BaseTipoVehiculo;
-use backend\models\MetodoPago;
-use backend\models\OperadorFinanciero;
-use backend\models\Pasajero;
-use backend\models\PasajeroServicio;
-use backend\models\VariablesServicio;
-use backend\models\ServicioVariables;
 use backend\models\Tasadia;
-use backend\models\VFlota;
+use backend\models\BaseTipoVehiculo;
 use yii\widgets\ActiveForm;
 use yii\helpers\Html;
-use kartik\widgets\DatePicker;
 use yii\helpers\ArrayHelper;
+use kartik\widgets\DatePicker;
 use kartik\select2\Select2;
-use kartik\switchinput\SwitchInput;
+use yii\widgets\MaskedInput;
 
 /* @var $this yii\web\View */
-/* @var $model backend\models\CuerpoBomberos */
-/* @var $form yii\widgets\ActiveForm */
+/* @var $model backend\models\Servicio */
+/* @var $model3 backend\models\ServicioPago */
+/* @var $pagos array */
 
-$municipio = [];
-/*
-if ($model->id_estado) {
-    $municipio = ArrayHelper::map(GeoMunicipio::find()->where(['id_estado' => $model->id_estado])->all(), 'id_municipio', 'nombre');
+$tasa = Tasadia::find()->where(['id_estatus' => TRUE])->one();
+
+// LÓGICA DE ESTADOS
+// Si faltante es null, es que no ha pagado nada.
+$es_nuevo = is_null($model->faltante);
+$esta_solvente = (!$es_nuevo && $model->faltante <= 0.1);
+
+// Definición de montos para mostrar (Formato manual para asegurar coma decimal)
+if ($es_nuevo) {
+    $valor_dolares = $model->monto;
+    $valor_bs = $model->monto * $tasa->valor;
+} else {
+    $valor_dolares = $model->faltante;
+    $valor_bs = $model->faltante * $tasa->valor;
 }
-*/
-
-
 ?>
 
-<div class="servicio-form">
-
-    <div class="box box-widget widget-user-2">
-        <div class="box box-default">
-            <div class="box-body">
-             
-
-                <div class="row">
-                    <div class="col-md-12">
-
-                        <fieldset>
-                            <div class="alert alert-success alert-dismissible">
-                                <?php
-                                $tasa = Tasadia::find()->where(['id_estatus' => TRUE])->one();
-                                ?>
-                                <button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>
-                                <h4><i class="icon fa fa-bank"></i> ¡Tasa del Día!</h4>
-                                <?php
-
-                                //$valor_bs = $tasa->valor * $model->monto;
-
-                                echo "Fecha de actualización: " .  Yii::$app->formatter->asDate($tasa->fecha_hora, 'php:d-m-Y') . " Valor: " . Yii::$app->formatter->asDecimal($tasa->valor, 2) . " Bs. ";
-                                if ($model->faltante > 0) {
-                                    $valor_bs = $model->faltante * $tasa->valor;
-                                    $valor_dolares = $model->faltante;
-                                } else {
-                                    $valor_bs = $tasa->valor * $model->monto;
-                                    $valor_dolares = $model->monto;
-                                }
-
-
-                                echo "<h4><b>Debe cancelar en Bs. </b> " . Yii::$app->formatter->asDecimal($valor_bs, 2) . " / $ " . Yii::$app->formatter->asDecimal($valor_dolares, 2) . "</h4>";
-                                ?>
-                               
-                            </div>
-                            <legend>Pagar servicio</legend>
-                            <table class="table">
-                                <tr style="background-color: #ededed;">
-                                    <th>Nro.</th>
-                                    <th>Fecha del Registro</th>
-                                    <th>Tipo de Servicio</th>
-                                    <th>Km</th>
-                                    <th>Fecha del Servicio</th>
-                                    <th>Monto ($)</th>
-                                </tr>
-                                <tr>
-                                    <td><?= $model->id_servicio ?></td>
-                                    <td>
-                                        <?= Yii::$app->formatter->asDate($model->fecha_registro, 'php:d-m-Y') ?>
-                                    </td>
-                                    <td>
-                                        <?php
-                                        $tipo_vehiculo = BaseTipoVehiculo::find()->where(['id' => $model->id_tipo_vehiculo])->one();
-                                        $ruta = TipoTrasladoRuta::find()->where(['id' => $model->id_tipo_traslado_ruta])->one();
-                                        $tipo_ruta = TipoRuta::find()->where(['id' => $model->id_tipo_ruta])->one();
-                                        echo $tipo_vehiculo->nombre_tipo_vehiculo . "/" . $ruta->nombre_traslado_ruta . "/" . $tipo_ruta->nombre_ruta;
-                                        ?>
-                                    </td>
-                                    <td><?= $model->km_servicio ?></td>
-                                    <td>
-                                        <?= Yii::$app->formatter->asDate($model->fecha_servicio, 'php:d-m-Y') ?>
-                                    </td>
-                                    <td><?= Yii::$app->formatter->asDecimal($model->monto, 2);   ?>
-
-                                    </td>
-
-                            </table>
-                            <?php
-                            $variable = ServicioVariables::find()->where(['id_servicio' => $model->id_servicio])->all();
-
-                            if ($variable) {
-                            ?>
-                                <legend>Servicio Adicional</legend>
-                                <table class="table" style="width: 50%;">
-                                    <tr style="background-color: #ededed;">
-                                        <th>Item.</th>
-                                        <th>Servicio Adicionales</th>
-                                        <th>Cantidad</th>
-                                        <th>Monto ($)</th>
-                                    </tr>
-                                    <?php
-                                    $variable = ServicioVariables::find()->where(['id_servicio' => $model->id_servicio])->all();
-                                    for ($i = 0; $i < count($variable); $i++) {
-                                    ?>
-                                        <tr>
-                                            <td>
-                                                <?= $i + 1; ?>
-                                            </td>
-                                            <td>
-                                                <?php $nombre_servicio = VariablesServicio::find()->where(['id_variable' => $variable[$i]['id_variable_servicio']])->one(); ?>
-                                                <?= $nombre_servicio->nombre_variable; ?>
-                                            </td>
-                                            <td style="text-align: right;">
-                                                <?= $variable[$i]['cantidad']; ?>
-                                            </td>
-                                            <td style="text-align: right;">
-                                                <?= $variable[$i]['monto']; ?>
-                                            </td>
-
-                                        </tr>
-                                    <?php
-                                    }
-                                    ?>
-                                </table>
-
-                            <?php }
-                            if ($pagos) {
-                            ?>
-                                <legend>Pagos previos</legend>
-                                <table class="table">
-                                    <tr style="background-color: #ededed;">
-                                        <th>Fecha del pago</th>
-                                        <th>Referencia</th>
-                                        <th>Monto</th>
-                                        <th>Moneda</th>
-                                        <th>Tipo de pago</th>
-                                        <th>Banco origen</th>
-                                        <th>Método de pago</th>
-                                        <th>Restan por pagar($)</th>
-                                        <th>Tasa</th>
-                                        <th>Observación</th>
-                                        <th>Acción</th>
-                                    </tr>
-                                    <?php
-
-                                    for ($i = 0; $i < count($pagos); $i++) {
-                                    ?>
-                                        <tr>
-                                            <td>
-                                                <?= Yii::$app->formatter->asDate($pagos[$i]['fecha_pago'], 'php:d-m-Y') ?>
-                                            </td>
-                                            <td style="text-align: right;">
-                                                <?= $pagos[$i]['referencia']; ?>
-                                            </td>
-                                            <td style="text-align: right;">
-                                                <?= $pagos[$i]['monto']; ?>
-                                            </td>
-                                            <td>
-                                                <?= $pagos[$i]['id_tipo_moneda']; ?>
-                                            </td>
-                                            <td>
-                                                <?= $pagos[$i]['tipo_pago']; ?>
-                                            </td>
-                                            <td>
-                                                <?php
-                                                if ($pagos[$i]['banco_origen']) {
-                                                    $banco_origen = OperadorFinanciero::find()->where(['id_operador' => $pagos[$i]['banco_origen']])->one();
-                                                    echo $banco_origen->nombre_operador;
-                                                } else {
-                                                    echo "-----";
-                                                }
-                                                ?>
-
-                                            </td>
-                                            <td>
-                                                <?php $metodo = BaseMetodosPago::find()->where(['id_metodo' => $pagos[$i]['id_metodo']])->one();
-                                                ?>
-
-                                                <?= $metodo->nombre_metodo; ?>
-                                            </td>
-                                            <td style="background-color: yellow;">
-
-                                                <?= Yii::$app->formatter->asDecimal($pagos[$i]['faltante'], 2);   ?>
-                                            </td>
-                                            <td>
-                       
-                                                <?=  number_format($pagos[$i]['tasa'], 2, ',', '.'). " Bs."?>
-                                            </td>
-                                            <td>
-
-                                                <?= $pagos[$i]['observacion_pago'];   ?>
-                                            </td>
-                                            <td>
-
-                                                <?= Html::a('Eliminar', ['borrarpago', 'id' => $pagos[$i]['id_pago'],'id_servicio' => $model->id_servicio], [
-                                                    'class' => 'btn btn-danger',
-                                                    'data' => [
-                                                        'confirm' => 'Seguro que desea eliminar el pago  registrado?',
-                                                        'method' => 'post',
-                                                    ],
-                                                ]) ?>
-                                            </td>
-                                        </tr>
-                                    <?php
-                                    }
-                                    ?>
-                                </table>
-                            <?php }  ?>
-                        </fieldset>
+<div class="servicio-form" style="background-color: #f4f7f6; padding: 20px;">
+    <div class="row">
+        <!-- LADO IZQUIERDO: RECIBO E HISTORIAL -->
+        <div class="col-md-5">
+            <div style="background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; margin-bottom: 20px;">
+                <!-- Color de barra dinámico según estatus -->
+                <div style="height: 8px; background: <?= $esta_solvente ? '#00a65a' : ($es_nuevo ? '#f39c12' : '#3c8dbc') ?>;"></div>
+                
+                <div style="padding: 25px;">
+                    <div class="text-center" style="margin-bottom: 20px;">
+                        <h4 style="margin: 0; font-weight: 800; color: #333; letter-spacing: 1px;">RESUMEN DE CUENTA</h4>
+                        <small style="color: #999;">Servicio #<?= $model->id_servicio ?></small>
+                        <div style="margin-top: 10px;">
+                            <span class="label" style="background-color: <?= $esta_solvente ? '#00a65a' : ($es_nuevo ? '#f39c12' : '#3c8dbc') ?>; padding: 5px 12px; border-radius: 4px;">
+                                <?= $es_nuevo ? 'SIN ABONOS' : ($esta_solvente ? 'SOLVENTE' : 'CON SALDO PENDIENTE') ?>
+                            </span>
+                        </div>
                     </div>
 
+                    <div style="border-top: 2px dashed #eee; border-bottom: 2px dashed #eee; padding: 15px 0; margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                            <span style="color: #777;">Vehículo:</span>
+                            <span style="font-weight: bold;">
+                                <?php $tipo_v = BaseTipoVehiculo::findOne($model->id_tipo_vehiculo); echo $tipo_v ? strtoupper($tipo_v->nombre_tipo_vehiculo) : 'N/A'; ?>
+                            </span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="color: #777;">Tasa aplicada:</span>
+                            <span style="color: #00a65a; font-weight: bold;"><?= number_format($tasa->valor, 2, ',', '.') ?> Bs.</span>
+                        </div>
+                    </div>
 
-                </div>
-                <?php $form = ActiveForm::begin([
-                    'options' => ['enctype' => 'multipart/form-data']
-                ]); ?>
-                 <?= $form->field($model3, 'monto_pagar')->hiddenInput(['readonly' => true, 'value' => round($valor_bs, 2)])->label(false); ?>
-                <div class="row">
-                    <div class="col-md-12">
-                        <fieldset>
-                            <legend>Información del pago</legend>
-                            <?php
-                                echo $form->field($model3, 'id_metodo')->widget(SwitchInput::classname(), [
-                                    'type' => SwitchInput::CHECKBOX,
-                                    'pluginOptions' => [
-                                        'handleWidth' => 60,
-                                        'offColor' => 'danger',
-                                        'onColor' => 'success',
-                                        'onText' => 'SI',
-                                        'offText' => 'NO'
-                                    ]
-                                ])->label('¿Pagará en efectivo?');
-                                echo $form->field($model, 'id_servicio')->hiddenInput(['readonly' => true, 'value' => $model->id_servicio])->label(false);
-                                ?>
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <?= $form->field($model3, 'tipo_pago')->widget(Select2::classname(), [
-                                        'data' =>
-                                        [
-                                            'Pago móvil' => 'Pago móvil',
-                                            'Transferencia' => 'Transferencia',
-                                            'Efectivo (Bs)' => 'Efectivo (Bs)',
-                                            'Efectivo (Divisas)' => 'Efectivo (Divisas)',
-                                            'Zelle' => 'Zelle',
-                                        ],
-                                        'options' => ['placeholder' => 'Seleccione...'],
-                                        'pluginOptions' => [
-                                            'multiple' => false,
-                                            'allowClear' => true,
-                                        ],
-                                    ]);
-                                    ?>
-                                </div>
-                                <div class="col-md-3">
-                                    <?= $form->field($model3, 'fecha_pago')->input('date', [
-                                        'max' => date('Y-m-d'),
-
-                                    ])->widget(DatePicker::className(), []) ?>
-                                </div>
-
-                                <div class="col-md-3">
-                                    <?= $form->field($model3, 'monto')->textInput(['maxlength' => true]) ?>
-                                </div>
-
-                                <div class="col-md-3">
-                                    <?= $form->field($model3, 'referencia')->textInput(['maxlength' => true]) ?>
-                                </div>
-
-                                <?= $form->field($model3, 'id_servicio')->hiddenInput(['readonly' => true, 'value' => $model->id_servicio])->label(false); ?>
-
+                    <div style="background: #f9f9f9; border-radius: 8px; padding: 15px;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span style="color: #555;">Monto Total:</span>
+                            <span style="font-weight: bold;">$ <?= number_format($model->monto, 2, ',', '.') ?></span>
+                        </div>
+                        
+                        <?php if (!$es_nuevo && $model->faltante < $model->monto): ?>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 5px; color: #3c8dbc;">
+                                <span>Total Abonado:</span>
+                                <span>- $ <?= number_format($model->monto - ($esta_solvente ? 0 : $model->faltante), 2, ',', '.') ?></span>
                             </div>
+                        <?php endif; ?>
 
-                            <div class="row">
-                                <div class="col-md-3">
-                                    <?= $form->field($model3, 'id_tipo_moneda')->widget(Select2::classname(), [
-                                        'data' =>
-                                        [
-                                            'Bs' => 'Bs',
-                                            '$' => 'Dolares',
-
-                                        ],
-                                        'options' => ['placeholder' => 'Seleccione...'],
-
-                                        'pluginOptions' => [
-                                            'multiple' => false,
-                                            'allowClear' => true,
-                                            'value' => ['Bs'],
-                                        ],
-                                    ]);
-                                    ?>
-                                </div>
-                                <div class="col-md-3">
-                                    <?php
-                                    $operadores = OperadorFinanciero::find()->all();
-                                    $lisoperador = ArrayHelper::map($operadores, 'id_operador', 'nombre_operador');
-                                    echo $form->field($model3, 'banco_origen')->widget(Select2::classname(), [
-                                        'data' => $lisoperador,
-                                        'pluginLoading' => false,
-                                        'value' => null,
-                                        'options' => ['placeholder' => 'Seleccione...'],
-                                        'pluginOptions' => [
-                                            'multiple' => false,
-                                            'allowClear' => true,
-                                        ],
-                                    ]);
-                                    ?>
-                                </div>
-
-                                <div class="col-md-6">
-                                    <?php
-                                    $metodo = BaseMetodosPago::find()->all();
-                                    $lismetodo = ArrayHelper::map($metodo, 'id_metodo', 'nombre_metodo');
-                                    echo $form->field($model3, 'id_metodo')->widget(Select2::classname(), [
-                                        'data' => $lismetodo,
-                                        'pluginLoading' => false,
-                                        'value' => null,
-                                        'options' => ['placeholder' => 'Seleccione...'],
-                                        'pluginOptions' => [
-                                            'multiple' => false,
-                                            'allowClear' => true,
-                                        ],
-                                    ]);
-                                    ?>
-                                </div>
-
+                        <div style="border-top: 1px solid #ddd; margin-top: 10px; padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: bold; color: #333;">PENDIENTE:</span>
+                            <div class="text-right">
+                                <?php if ($esta_solvente): ?>
+                                    <div style="font-weight: 900; font-size: 1.5em; color: #00a65a; line-height: 1;">0,00 <small style="font-size: 0.6em;">Bs.</small></div>
+                                    <div style="color: #00a65a; font-weight: bold; font-size: 12px;">PAGADO TOTAL</div>
+                                <?php else: ?>
+                                    <div style="font-weight: 900; font-size: 1.5em; color: #e74c3c; line-height: 1;">
+                                        <?= number_format($valor_bs, 2, ',', '.') ?> <small style="font-size: 0.6em;">Bs.</small>
+                                    </div>
+                                    <div style="color: #7f8c8d; font-weight: bold;">$ <?= number_format($valor_dolares, 2, ',', '.') ?></div>
+                                <?php endif; ?>
                             </div>
-
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <?php echo $form->field($model3, 'observacion_pago')->textarea(['rows' => 2]); ?>
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-12">
-                                    <?php echo $form->field($model2, 'observacion')->textarea(['rows' => 2])->label("Observación general para el conductor asignado"); ?>
-                                </div>
-                            </div>
-                        </fieldset>
+                        </div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <div class="box-tools pull-right">
-                        <?= Html::a('<span class="glyphicon glyphicon-chevron-left"></span> <b>Regresar</b>', ['index'], ['class' => 'btn btn-warning btn']) ?>
-                        <?= Html::submitButton('<span class="glyphicon glyphicon-ok"></span> <b>Guardar</b>', ['class' => 'btn btn-primary btn']) ?>
-
-                    </div>
-                </div>
-
-                <?php ActiveForm::end(); ?>
-
             </div>
+
+            <!-- SECCIÓN: HISTORIAL DE PAGOS -->
+            <div class="box box-solid" style="border-radius: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.05);">
+                <div class="box-header with-border">
+                    <h4 class="box-title" style="font-weight: bold; color: #444;"><i class="fa fa-history"></i> Historial de Pagos</h4>
+                </div>
+                <div class="box-body" style="padding: 0;">
+                    <?php if (!empty($pagos)): ?>
+                        <div class="table-responsive">
+                            <table class="table table-hover" style="margin-bottom: 0; font-size: 0.9em;">
+                                <tbody>
+                                    <?php foreach ($pagos as $pago): ?>
+                                        <tr>
+                                            <td style="padding-left: 20px;">
+                                                <div style="font-weight: bold; color: #333;"><?= date('d/m/Y', strtotime($pago->fecha_pago)) ?></div>
+                                                <small class="text-muted">Ref: <?= $pago->referencia ?: 'S/R' ?></small>
+                                            </td>
+                                            <td>
+                                                <span class="label label-default" style="background: #eee; color: #666; border-radius: 4px;">
+                                                    <?= $pago->tipo_pago ?>
+                                                </span>
+                                            </td>
+                                            <td class="text-right" style="padding-right: 20px;">
+                                                <div style="font-weight: bold; color: #00a65a;">
+                                                    <?= number_format($pago->monto, 2, ',', '.') ?> 
+                                                    <small><?= $pago->id_tipo_moneda ?></small>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div style="padding: 30px; text-align: center; color: #bbb;">
+                            <i class="fa fa-info-circle fa-2x" style="display: block; margin-bottom: 10px;"></i>
+                            No se han registrado abonos aún.
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- LADO DERECHO: FORMULARIO -->
+        <div class="col-md-7">
+            <?php if (!$esta_solvente): ?>
+                <div class="box box-primary" style="border-radius: 12px; border-top: 3px solid #00a65a;">
+                    <div class="box-header with-border" style="padding: 15px 20px;">
+                        <h3 class="box-title" style="font-weight: bold; color: #00a65a;"><i class="fa fa-plus-circle"></i> Registrar Nuevo Pago</h3>
+                    </div>
+                    <div class="box-body" style="padding: 25px;">
+                        <?php $form = ActiveForm::begin([
+                            'id' => 'pago-form',
+                            'enableClientValidation' => false,
+                            'options' => ['autocomplete' => 'off'],
+                        ]); ?>
+
+                        <?= $form->field($model3, 'monto_pagar')->hiddenInput(['value' => round($valor_bs, 2)])->label(false); ?>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <?= $form->field($model3, 'tipo_pago')->widget(Select2::classname(), [
+                                    'data' => [
+                                        'Pago móvil' => 'Pago móvil', 'Transferencia' => 'Transferencia',
+                                        'Efectivo (Bs)' => 'Efectivo (Bs)', 'Efectivo (Divisas)' => 'Efectivo (Divisas)', 'Zelle' => 'Zelle',
+                                    ],
+                                    'options' => ['placeholder' => 'Seleccione...'],
+                                ])->label('TIPO DE PAGO', ['style'=>'font-weight:700; color:#555; font-size:11px;']); ?>
+                            </div>
+                            <div class="col-md-6">
+                                <?= $form->field($model3, 'id_tipo_moneda')->widget(Select2::classname(), [
+                                    'data' => ['Bs' => 'Bolívares (Bs)', '$' => 'Dólares ($)'],
+                                ])->label('TIPO DE MONEDA', ['style'=>'font-weight:700; color:#555; font-size:11px;']); ?>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label style="font-weight:700; color:#555; font-size:11px;">MONTO DEL PAGO</label>
+                                <?= $form->field($model3, 'monto', ['template' => "{input}\n{error}"])->widget(MaskedInput::classname(), [
+                                    'clientOptions' => [
+                                        'alias' => 'decimal', 'groupSeparator' => '.', 'radixPoint' => ',', 
+                                        'autoGroup' => true, 'digits' => 2, 'removeMaskOnSubmit' => true,
+                                    ],
+                                    'options' => [
+                                        'class' => 'form-control text-right',
+                                        'style' => 'border-radius: 10px; font-weight: bold; font-size: 1.4em; color: #00a65a; background: #f0fff4; height:48px;',
+                                    ]
+                                ]) ?>
+                            </div>
+                            <div class="col-md-6">
+                                <?= $form->field($model3, 'fecha_pago')->widget(DatePicker::className(), [
+                                    'pluginOptions' => ['autoclose' => true, 'format' => 'yyyy-mm-dd', 'todayHighlight' => true],
+                                    'options' => ['style' => 'border-radius: 10px; height:48px;']
+                                ])->label('FECHA DEL PAGO', ['style'=>'font-weight:700; color:#555; font-size:11px;']); ?>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <?= $form->field($model3, 'referencia')->textInput([
+                                    'placeholder' => 'Nro. de Operación',
+                                    'style' => 'border-radius: 8px; height:40px;'
+                                ])->label('REFERENCIA', ['style'=>'font-weight:700; color:#555; font-size:11px;']); ?>
+                            </div>
+                            <div class="col-md-6">
+                                <?= $form->field($model3, 'id_metodo')->widget(Select2::classname(), [
+                                    'data' => ArrayHelper::map(BaseMetodosPago::find()->all(), 'id_metodo', 'nombre_metodo'),
+                                    'options' => ['placeholder' => 'Seleccione...'],
+                                ])->label('DESTINO DE FONDOS', ['style'=>'font-weight:700; color:#555; font-size:11px;']); ?>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
+                                <?= $form->field($model3, 'observacion_pago')->textarea([
+                                    'rows' => 2, 
+                                    'placeholder' => '¿Algún detalle importante?',
+                                    'style' => 'border-radius: 8px; resize: none; width: 100%; padding: 10px;'
+                                ])->label('OBSERVACIÓN DEL PAGO', ['style'=>'font-weight:700; color:#555; font-size:11px;']); ?>
+                            </div>
+                        </div>
+
+                        <div class="form-group text-right" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+                            <?= Html::a('CANCELAR', ['index'], ['class' => 'btn btn-default', 'style' => 'border-radius: 10px; padding: 10px 25px;']) ?>
+                            <?= Html::submitButton('<i class="fa fa-check-circle"></i> CONFIRMAR PAGO', [
+                                'class' => 'btn btn-success', 
+                                'style' => 'border-radius: 10px; padding: 10px 30px; font-weight: bold; background-color: #00a65a; border:none;'
+                            ]) ?>
+                        </div>
+
+                        <?php ActiveForm::end(); ?>
+                    </div>
+                </div>
+            <?php else: ?>
+                <!-- BLOQUE DE SOLVENCIA -->
+                <div class="text-center" style="padding: 60px 20px; background: white; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.05);">
+                    <i class="fa fa-check-circle fa-5x" style="color: #00a65a; margin-bottom: 20px;"></i>
+                    <h2 style="font-weight: 800; color: #333;">SERVICIO SOLVENTE</h2>
+                    <p class="text-muted" style="font-size: 1.1em;">Este servicio ya ha sido pagado en su totalidad y no registra deudas pendientes.</p>
+                    <div style="margin-top: 30px;">
+                        <?= Html::a('<i class="fa fa-arrow-left"></i> VOLVER AL LISTADO', ['index'], [
+                            'class' => 'btn btn-primary', 
+                            'style' => 'border-radius: 20px; padding: 10px 35px; font-weight: bold;'
+                        ]) ?>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
-
 </div>
-
-<br>
-<?php
-/*
-if ($registros) {
-?>
-    <div class="box box-widget widget-user-2">
-        <div class="box box-purple">
-            <div class="box-body">
-                <div class="col-md-12">
-                    <table class='table table-bordered' width=100%>
-                        <tr style="background-color: #394B8B; color: white">
-                            <th>Fecha de Asignación</th>
-                            <th>Conductor</th>
-                            <th>Observación</th>
-                        </tr>
-                        <tr>
-                            <?php
-                            for ($i = 0; $i < count($registros); $i++) {
-                            ?>
-                        <tr>
-                            <td>
-                                <?php
-                                    $fecha = explode("-", $registros[$i]['fecha_asignacion']);
-                                    $fecha = $fecha[2] . "-" . $fecha[1] . "-" . $fecha[0];
-
-                                    echo $fecha;
-                                ?>
-                             </td>
-                            <td>
-                            <?php
-                                $conductor = VConductores::find()->where(['id' => $registros[$i]['id_conductor']])->one();
-                                echo $conductor->datos; ?>
-
-                            </td>
-                            <td>
-                            <?php
-                                $movflota = MovFlota::find()->where(['id_accion' => $registros[$i]['id_asignacion']])->one();
-                                echo $movflota->observacion; ?>
-
-                            </td>
-                       
-                            
-                        </tr>
-                    <?php
-                            }
-                    ?>
-
-                    </tr>
-                    </table>
-                </div>
-            </div>
-        </div>
-    <?php  }*/ ?>
