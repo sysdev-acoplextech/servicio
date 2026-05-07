@@ -32,7 +32,20 @@ $this->registerCss("
     }
     .card-servicio:hover { transform: translateY(-5px); box-shadow: 0 12px 25px rgba(0,0,0,0.05); }
     
-    /* Tags de Estatus (Derecha) */
+    /* Alerta de Ruta Pendiente */
+    .card-ruta-pendiente { border: 2px solid #F59E0B !important; }
+    .tag-ruta-alerta { 
+        position: absolute; top: 45px; right: 15px; background: #EF4444; color: white; 
+        padding: 2px 8px; border-radius: 6px; font-size: 9px; font-weight: 800;
+        animation: pulse-red 2s infinite;
+    }
+
+    @keyframes pulse-red {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+
     .card-tag { 
         position: absolute; top: 15px; right: 15px; padding: 4px 12px; 
         border-radius: 8px; font-size: 10px; font-weight: 800; text-transform: uppercase;
@@ -40,7 +53,6 @@ $this->registerCss("
     .tag-confirmado { background: #DCFCE7; color: #166534; }
     .tag-pendiente { background: #FEF3C7; color: #92400E; }
 
-    /* Tags de Pago (Izquierda) */
     .pay-tag {
         position: absolute; top: 15px; left: 15px; padding: 4px 10px; 
         border-radius: 8px; font-size: 9px; font-weight: 800; text-transform: uppercase;
@@ -59,13 +71,6 @@ $this->registerCss("
     .card-info-row i { color: #EA4C2D; width: 15px; }
 
     #calendar { background: #fff; padding: 20px; border-radius: 20px; border: 1px solid #E2E8F0; }
-    .btn-filter-dropdown {
-        border-radius: 15px; padding: 10px 20px; font-weight: bold; 
-        background: #F1F5F9; border: 1px solid #E2E8F0; color: #64748B;
-    }
-    .btn-filter-dropdown:hover { background: #E2E8F0; }
-    .dropdown-menu { border-radius: 15px; border: none; box-shadow: 0 10px 25px rgba(0,0,0,0.1); padding: 10px; }
-    .dropdown-menu > li > a { border-radius: 8px; padding: 8px 20px; font-weight: 600; }
 ");
 
 $this->registerJs("
@@ -106,28 +111,6 @@ $this->registerJs("
                 </div>
             </div>
             <div class="col-md-4 text-right">
-
-                <div class="dropdown" style="display: inline-block; margin-right: 5px;">
-                    <button class="btn btn-default dropdown-toggle btn-filter-dropdown" type="button" data-toggle="dropdown">
-                        <i class="fa fa-filter"></i> Filtrar <span class="caret"></span>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-right">
-                        <li class="dropdown-header">ESTATUS</li>
-                        <li><?= Html::a('Todos los servicios', ['index']) ?></li>
-                        <li class="divider"></li>
-                        <li><?= Html::a('⭐ Hoy', ['index', 'ServiciosSearch[fecha_servicio]' => date('Y-m-d')]) ?></li>
-                        <li><?= Html::a('⏳ Agendados', ['index', 'ServiciosSearch[id_estatus]' => 5]) ?></li>
-                        <li><?= Html::a('✅ Confirmados', ['index', 'ServiciosSearch[id_estatus]' => 11]) ?></li>
-                        <li><?= Html::a('🔄 En Proceso', ['index', 'ServiciosSearch[id_estatus]' => 9]) ?></li>
-                        <li class="dropdown-header">ESTATUS DE PAGO</li>
-                        <li><?= Html::a('💰 Pagados Total', ['index', 'ServiciosSearch[id_estatus]' => 7]) ?></li>
-                        <li><?= Html::a('💸 Con Deuda', ['index', 'ServiciosSearch[id_estatus]' => 6]) ?></li>
-                    </ul>
-                </div>
-                <?= Html::a('<i class="fa fa-calculator"></i> CÁLCULO RÁPIDO', ['cotizacion-rapida/create'], [
-                    'class' => 'btn btn-info',
-                    'style' => 'border-radius:15px; padding: 10px 20px; font-weight:bold; background: #3B82F6; border:none; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);'
-                ]) ?>
                 <?= Html::a('<i class="fa fa-plus"></i> NUEVO SERVICIO', ['create'], [
                     'class' => 'btn btn-success',
                     'style' => 'border-radius:15px; padding: 10px 25px; font-weight:bold; background: #10B981; border:none;'
@@ -136,55 +119,41 @@ $this->registerJs("
         </div>
     </div>
 
-    <!-- VISTA TARJETAS -->
     <div id="view-grid" class="view-content">
         <div class="grid-servicios">
             <?php foreach ($dataProvider->getModels() as $model): 
                 $cli = Cliente::findOne($model->id_cliente);
                 $fp = FormaPago::findOne($model->id_forma_pago);
-                
-                // --- DEFINICIÓN DE ESTATUS ---
                 $esConfirmado = ($model->id_estatus == 11); 
                 $esPagoTotalStatus = ($model->id_estatus == 7);
                 $pasajero = PasajeroServicio::find()->where(['id_servicio' => $model->id_servicio])->one();
 
-                // --- LÓGICA DE ETIQUETAS DE PAGO ---
+                // Lógica de validación de ruta
+                $tieneRuta = ($pasajero && !empty($pasajero->origen) && !empty($pasajero->destino));
+                $alertaRuta = ($esConfirmado && !$tieneRuta);
+
+                // LÓGICA DE ETIQUETAS DE PAGO
                 $payTagHtml = '';
                 $faltante = $model->faltante;
                 $montoTotal = $model->monto;
 
-                if ($esPagoTotalStatus) {
-                    // PRIORIDAD: Si el estatus es 7, es Pago Total sí o sí
-                    $payTagHtml = '<div class="pay-tag pay-total"><i class="fa fa-check"></i> Pago Total</div>';
-                } else {
-                    // Lógica para el resto de los estatus
-                    if ($model->id_forma_pago == 2) {
-                        // Transferencia / Pago Móvil
-                        if ($faltante <= 0 && !is_null($faltante)) {
-                            $payTagHtml = '<div class="pay-tag pay-total"><i class="fa fa-check"></i> Pago Total</div>';
-                        } else {
-                            $payTagHtml = '<div class="pay-tag pay-deuda"><i class="fa fa-warning"></i> Pago Parcial</div>';
-                        }
-                    } elseif ($model->id_forma_pago == 4) {
-                        // Efectivo
-                        $payTagHtml = '<div class="pay-tag pay-parcial" style="background:#f39c12;"><i class="fa fa-money"></i> Pago en Servicio</div>';
-                    } elseif ($model->id_forma_pago == 3) {
-                        // Crédito
-                        $payTagHtml = '<div class="pay-tag" style="background:#95a5a6; color:white;"><i class="fa fa-university"></i> Crédito</div>';
+                if ($esConfirmado || $esPagoTotalStatus) {
+                    if ($esPagoTotalStatus || ($faltante <= 0 && !is_null($faltante))) {
+                        $payTagHtml = '<div class="pay-tag pay-total"><i class="fa fa-check"></i> Pago Total</div>';
+                    } elseif ($faltante > 0 && $faltante < $montoTotal) {
+                        $payTagHtml = '<div class="pay-tag pay-parcial"><i class="fa fa-warning"></i> Pago Parcial</div>';
                     } else {
-                        if ($faltante <= 0 && !is_null($faltante)) {
-                            $payTagHtml = '<div class="pay-tag pay-total"><i class="fa fa-check"></i> Pago Total</div>';
-                        } else {
-                            $payTagHtml = '<div class="pay-tag pay-deuda"><i class="fa fa-hourglass-start"></i> Esperando Pago</div>';
-                        }
+                        $payTagHtml = '<div class="pay-tag pay-deuda"><i class="fa fa-hourglass-start"></i> Esperando Pago</div>';
                     }
                 }
             ?>
-                <div class="card-servicio">
-                    <!-- Estatus de Pago (Izquierda) -->
+                <div class="card-servicio <?= $alertaRuta ? 'card-ruta-pendiente' : '' ?>">
                     <?= $payTagHtml ?>
+                    
+                    <?php if ($alertaRuta): ?>
+                        <div class="tag-ruta-alerta"><i class="fa fa-exclamation-triangle"></i> RUTA PENDIENTE</div>
+                    <?php endif; ?>
 
-                    <!-- Estatus de Servicio (Derecha) -->
                     <div class="card-tag <?= ($esConfirmado || $esPagoTotalStatus) ? 'tag-confirmado' : 'tag-pendiente' ?>">
                         <?= $esPagoTotalStatus ? 'Completado' : ($esConfirmado ? 'Confirmado' : 'Agendado') ?>
                     </div>
@@ -208,7 +177,6 @@ $this->registerJs("
                             <div class="card-info-row" style="margin-bottom: 0; flex: 1; border-left: 1px solid #eee; padding-left: 10px;">
                                 <i class="fa fa-car"></i> 
                                 <span style="font-size: 0.9em;">
-                                    Vehículo: 
                                     <?php 
                                     $tipoVehiculo = BaseTipoVehiculo::findOne($model->id_tipo_vehiculo);
                                     echo $tipoVehiculo ? $tipoVehiculo->nombre_tipo_vehiculo : 'N/A';
@@ -221,25 +189,25 @@ $this->registerJs("
                             $query = trim($pasajero->google_map);
                             $urlMaps = "https://www.google.com/maps/search/?api=1&query=" . rawurlencode($query);
                         ?>
-                            <a href="<?= $urlMaps ?>" 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            class="btn btn-xs" 
-                            style="display: block; width: 100%; margin-bottom: 15px; background: #0EA5E9; color: white; font-weight: 800; font-size: 10px; border-radius: 20px; border: none; padding: 8px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-                            <i class="fa fa-map-o"></i> ABRIR RUTA EN MAPS
+                            <a href="<?= $urlMaps ?>" target="_blank" rel="noopener noreferrer" class="btn btn-xs" 
+                               style="display: block; width: 100%; margin-bottom: 15px; background: #0EA5E9; color: white; font-weight: 800; font-size: 10px; border-radius: 20px; border: none; padding: 8px; text-align: center;">
+                                <i class="fa fa-map-o"></i> ABRIR RUTA EN MAPS
                             </a>
                         <?php endif; ?>
 
                         <div class="card-info-row">
                             <i class="fa fa-arrow-circle-left "></i> 
-                            <span>Origen: <?= $pasajero ? $pasajero->origen : 'N/A' ?></span>
+                            <span style="<?= empty($pasajero->origen) ? 'color:#EF4444; font-weight:bold;' : '' ?>">
+                                Origen: <?= ($pasajero && !empty($pasajero->origen)) ? $pasajero->origen : 'SIN ASIGNAR' ?>
+                            </span>
                         </div>
                         <div class="card-info-row">
                             <i class="fa fa-arrow-circle-right "></i> 
-                            <span>Destino: <?= $pasajero ? $pasajero->destino : 'N/A' ?></span>
+                            <span style="<?= empty($pasajero->destino) ? 'color:#EF4444; font-weight:bold;' : '' ?>">
+                                Destino: <?= ($pasajero && !empty($pasajero->destino)) ? $pasajero->destino : 'SIN ASIGNAR' ?>
+                            </span>
                         </div>
                         
-                        <!-- Barra de progreso visual -->
                         <?php if (($esConfirmado || $esPagoTotalStatus) && $model->id_forma_pago != 3 && $montoTotal > 0): 
                             $porcentaje = $esPagoTotalStatus ? 100 : ((($montoTotal - $faltante) / $montoTotal) * 100);
                         ?>
@@ -249,75 +217,28 @@ $this->registerJs("
                         <?php endif; ?>
 
                         <div style="margin-top: 15px; display: flex; gap: 8px;">
-                            <?= Html::a('Ver Detalles', ['view', 'id' => $model->id_servicio], [
-                                'class' => 'btn btn-default btn-sm', 
-                                'style' => 'border-radius:10px; flex:1; font-weight:700;'
-                            ]) ?>
+                            <?= Html::a('<i class="fa fa-eye"></i>', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-default btn-sm', 'style' => 'border-radius:10px; font-weight:700; padding: 5px 12px;']) ?>
+                            
+                            <?php if (!$esConfirmado && !$esPagoTotalStatus): ?>
+                                <?= Html::a('<i class="fa fa-check"></i>', ['confirmar', 'id' => $model->id_servicio], [
+                                    'class' => 'btn btn-warning btn-sm',
+                                    'title' => 'Confirmar Servicio',
+                                    'style' => 'border-radius:10px; background:#F59E0B; border:none; color:white; padding: 5px 12px;',
+                                    'data' => [
+                                        'confirm' => '¿Estás seguro de que deseas CONFIRMAR este servicio?',
+                                        'method' => 'post',
+                                    ],
+                                ]) ?>
+                            <?php endif; ?>
 
-                            <?= Html::a('<i class="fa fa-money"></i>', ['pagar', 'id' => $model->id_servicio], [
-                                'class' => 'btn btn-success btn-sm', 
-                                'title' => 'Registrar Pago',
-                                'style' => 'border-radius:10px; background:#10B981; border:none; color:white; padding: 5px 12px;'
-                            ]) ?>
-
-                            <?= Html::a('<i class="fa fa-pencil"></i>', ['update', 'id' => $model->id_servicio], [
-                                'class' => 'btn btn-info btn-sm', 
-                                'title' => 'Editar Servicio',
-                                'style' => 'border-radius:10px; background:#3B82F6; border:none; color:white; padding: 5px 12px;'
-                            ]) ?>
-
-                            <?= Html::a('<i class="fa fa-user-plus"></i>', ['agendar', 'id' => $model->id_servicio], [
-                                'class' => 'btn btn-primary btn-sm',
-                                'title' => 'Agregar Conductor',
-                                'style' => 'border-radius:10px; background:#6366F1; border:none; color:white; padding: 5px 12px;'
-                            ]) ?>
-
-                            <?= Html::a('<i class="fa fa-whatsapp"></i>', ['view', 'id' => $model->id_servicio], [
-                                'class' => 'btn btn-success btn-sm', 
-                                'style' => 'border-radius:10px; background:#25D366; border:none;'
-                            ]) ?>
+                            <?= Html::a('<i class="fa fa-money"></i>', ['pagar', 'id' => $model->id_servicio], ['class' => 'btn btn-success btn-sm', 'style' => 'border-radius:10px; background:#10B981; border:none; color:white; padding: 5px 12px;']) ?>
+                            <?= Html::a('<i class="fa fa-pencil"></i>', ['update', 'id' => $model->id_servicio], ['class' => 'btn btn-info btn-sm', 'style' => 'border-radius:10px; background:#3B82F6; border:none; color:white; padding: 5px 12px;']) ?>
+                            <?= Html::a('<i class="fa fa-user-plus"></i>', ['agendar', 'id' => $model->id_servicio], ['class' => 'btn btn-primary btn-sm', 'style' => 'border-radius:10px; background:#6366F1; border:none; color:white; padding: 5px 12px;']) ?>
+                            <?= Html::a('<i class="fa fa-whatsapp"></i>', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-success btn-sm', 'style' => 'border-radius:10px; background:#25D366; border:none; color:white; padding: 5px 12px;']) ?>
                         </div>
                     </div>
                 </div>
             <?php endforeach; ?>
         </div>
     </div>
-
-    <!-- VISTA LISTA -->
-    <div id="view-list" class="view-content" style="display: none;">
-        <div class="control-panel" style="padding: 0; overflow: hidden;">
-            <table class="table" style="margin-bottom: 0;">
-                <thead style="background: #F8FAFC;">
-                    <tr style="color: #64748B; font-size: 11px; text-transform: uppercase;">
-                        <th class="text-center">ID</th>
-                        <th>Cliente</th>
-                        <th>Fecha</th>
-                        <th>Forma de Pago</th>
-                        <th class="text-right">Monto</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($dataProvider->getModels() as $model): ?>
-                        <tr>
-                            <td class="text-center"><b>#<?= $model->id_servicio ?></b></td>
-                            <td><b><?= Cliente::findOne($model->id_cliente)->nombre_apellido ?? 'N/A' ?></b></td>
-                            <td><?= Yii::$app->formatter->asDate($model->fecha_servicio, 'medium') ?></td>
-                            <td><?= FormaPago::findOne($model->id_forma_pago)->descripcion ?? 'N/A' ?></td>
-                            <td class="text-right"><b>$ <?= number_format($model->monto, 2, ',', '.') ?></b></td>
-                            <td class="text-right">
-                                <?= Html::a('<i class="fa fa-eye"></i>', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-xs btn-default', 'style' => 'border-radius:8px;']) ?>
-                                <?= Html::a('<i class="fa fa-pencil"></i>', ['update', 'id' => $model->id_servicio], ['class' => 'btn btn-xs btn-info', 'style' => 'border-radius:8px; margin-left:5px;']) ?>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div id="view-calendar" class="view-content" style="display: none;">
-        <div id="calendar"></div>
-    </div>
-
 </div>

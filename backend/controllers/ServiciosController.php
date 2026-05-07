@@ -1958,4 +1958,23 @@ class ServiciosController extends Controller
             'pasajerosGuardados' => $pasajerosGuardados, // Pasamos los pasajeros actuales a la vista
         ]);
     }
+
+    public function actionConfirmar($id)
+    {
+        // Buscamos el modelo por su ID
+        $model = $this->findModel($id);
+
+        // Asignamos el ID de estatus correspondiente a 'Confirmado'
+        $model->id_estatus = 11;
+
+        // Intentamos guardar el cambio
+        if ($model->save(false)) { // Usamos false para saltar validaciones de campos no relacionados si es necesario
+            Yii::$app->session->setFlash('success', "El servicio #{$id} ha sido confirmado con éxito.");
+        } else {
+            Yii::$app->session->setFlash('error', "No se pudo confirmar el servicio.");
+        }
+
+        // Redireccionamos siempre al index para que permanezca en la misma vista
+        return $this->redirect(['index']);
+    }
 }
