@@ -1,320 +1,132 @@
 <?php
-
-use backend\models\Conductor;
-use backend\models\MovFlota;
-use backend\models\VConductores;
-use kartik\depdrop\DepDrop;
-use yii\helpers\Url;
-use backend\models\TipoRuta;
-use backend\models\TipoTrasladoRuta;
-use backend\models\BaseTipoVehiculo;
-use backend\models\Pasajero;
-use backend\models\PasajeroServicio;
-use backend\models\VariablesServicio;
-use backend\models\ServicioVariables;
-use backend\models\VFlota;
-use yii\widgets\ActiveForm;
 use yii\helpers\Html;
-use kartik\widgets\DatePicker;
-use yii\helpers\ArrayHelper;
-use kartik\switchinput\SwitchInput;
-use kartik\select2\Select2;
+use yii\widgets\ActiveForm;
+use yii\helpers\Url;
 
-/* @var $this yii\web\View */
-/* @var $model backend\models\CuerpoBomberos */
-/* @var $form yii\widgets\ActiveForm */
-$municipio = [];
-/*
-if ($model->id_estado) {
-    $municipio = ArrayHelper::map(GeoMunicipio::find()->where(['id_estado' => $model->id_estado])->all(), 'id_municipio', 'nombre');
-}
-*/
+// Detectamos si ya tiene una asignación manual (conductor y flota guardados)
+// o si es una asignación simple por combo.
+$esManual = (!empty($model->id_conductor) && !empty($model->id_flota));
 ?>
 
-<div class="servicio-form">
+<?php
+$this->registerCss("
+    .ticket-container { max-width: 550px; margin: 20px auto; background: #fff; border-radius: 20px; border: 1px solid #E2E8F0; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+    .ticket-header { background: #1B242D; color: #fff; padding: 20px; text-align: center; }
+    .ticket-body { padding: 25px; position: relative; }
+    
+    #carga-trabajo-container {
+        background: #F8FAFC; border-radius: 15px; padding: 15px; margin-bottom: 20px;
+        border-left: 4px solid #EA4C2D; display: none;
+    }
+    .info-mini-ticket { background: #fff; padding: 8px 12px; border-radius: 10px; margin-top: 8px; font-size: 11px; font-weight: 700; border: 1px solid #E2E8F0; display: flex; justify-content: space-between; }
 
-    <div class="box box-widget widget-user-2">
-        <div class="box box-default">
-            <div class="box-body">
-                <?php $form = ActiveForm::begin([
-                    'options' => ['enctype' => 'multipart/form-data']
-                ]); ?>
+    .form-control { border-radius: 12px !important; height: 45px; font-weight: 600; border: 1.5px solid #CBD5E1; }
+    .btn-assign { background: #10B981; color: white; border-radius: 15px !important; font-weight: 800; width: 100%; padding: 14px; border: none; margin-top: 20px; cursor: pointer; }
+    
+    .mode-switch { display: flex; gap: 10px; margin-bottom: 20px; background: #F1F5F9; padding: 5px; border-radius: 12px; }
+    .btn-mode { flex: 1; border: none; padding: 10px; border-radius: 8px; font-size: 11px; font-weight: 800; color: #64748B; background: transparent; cursor: pointer; }
+    .btn-mode.active { background: #fff; color: #1B242D; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
-                <div class="row">
-                    <div class="col-md-12">
-                        <fieldset>
-                            <legend>Servicio</legend>
-                            <table class="table">
-                                <tr style="background-color: #ededed;">
-                                    <th>Nro.</th>
-                                    <th>Fecha del Registro</th>
-                                    <th>Tipo de Servicio</th>
-                                    <th>Km</th>
-                                    <th>Fecha del Servicio</th>
-                                    <th>Monto ($)</th>
-                                </tr>
-                                <tr>
-                                    <td><?= $model->id_servicio ?></td>
-                                    <td>
-                                        <?= Yii::$app->formatter->asDate($model->fecha_registro, 'php:d-m-Y') ?>
-                                    </td>
-                                    <td>
-                                        <?php
-                                        $tipo_vehiculo = BaseTipoVehiculo::find()->where(['id' => $model->id_tipo_vehiculo])->one();
-                                        $ruta = TipoTrasladoRuta::find()->where(['id' => $model->id_tipo_traslado_ruta])->one();
-                                        $tipo_ruta = TipoRuta::find()->where(['id' => $model->id_tipo_ruta])->one();
-                                        echo $tipo_vehiculo->nombre_tipo_vehiculo . "/" . $ruta->nombre_traslado_ruta . "/" . $tipo_ruta->nombre_ruta;
-                                        ?>
-                                    </td>
-                                    <td><?= $model->km_servicio ?></td>
-                                    <td>
-                                        <?= Yii::$app->formatter->asDate($model->fecha_servicio, 'php:d-m-Y') ?>
-                                    </td>
-                                    <td><?= $model->monto ?></td>
+    .manual-selects { border: 1px dashed #CBD5E1; padding: 20px; border-radius: 15px; background: #fafafa; }
+");
 
-                            </table>
-                            <?php
-                                $variable = ServicioVariables::find()->where(['id_servicio' => $model->id_servicio])->all();
+$this->registerJs("
+    // Función para manejar el cambio de vista
+    function switchMode(mode) {
+        $('.btn-mode').removeClass('active');
+        $('.btn-mode[data-mode=\"' + mode + '\"]').addClass('active');
 
-                                if ($variable){
-                            ?>
-                            <legend>Servicio Adicional</legend>
-                                <table class="table">
-                                    <tr style="background-color: #ededed;">
-                                        <th>Item.</th>
-                                        <th>Servicio Adicionales</th>
-                                        <th>Cantidad</th>
-                                        <th>Monto ($)</th>
-                                    </tr>
-                                    <?php
-                                    $variable = ServicioVariables::find()->where(['id_servicio' => $model->id_servicio])->all();
-                                    for ($i = 0; $i < count($variable); $i++) {
-                                    ?>
-                                        <tr>
-                                            <td>
-                                                <?= $i + 1; ?>
-                                            </td>
-                                            <td>
-                                                <?php $nombre_servicio = VariablesServicio::find()->where(['id_variable' => $variable[$i]['id_variable_servicio']])->one(); ?>
-                                                <?= $nombre_servicio->nombre_variable; ?>
-                                            </td>
-                                            <td style="text-align: right;">
-                                                <?= $variable[$i]['cantidad']; ?>
-                                            </td>
-                                            <td style="text-align: right;">
-                                                <?= $variable[$i]['monto']; ?>
-                                            </td>
-                                        </tr>
-                                    <?php
-                                    }
-                                    ?>
-                                </table>
+        if(mode == 'manual') {
+            $('.field-servicios-id_flota').hide();
+            $('.manual-selects').show();
+        } else {
+            $('.field-servicios-id_flota').show();
+            $('.manual-selects').hide();
+        }
+    }
 
-                              <?php } ?>  
-                            <legend>Pasajero(s)</legend>
-                            <table class="table">
-                                <tr style="background-color: #ededed;">
-                                    <th>Ruta</th>
-                                    <th>Nombre</th>
-                                    <th>Teléfono</th>
-                                    <th>Fecha</th>
-                                    <th>Hora</th>
-                                    <th>Origen</th>
-                                    <th>Destino</th>
-                                </tr>
-                                <tr>
-                                <?php
-                                $pax = PasajeroServicio::find()->where(['id_servicio'=>$model->id_servicio])->all();
-                               
-                                for ($i=0; $i < count($pax); $i++) { 
-                                    ?>
-                                    <tr>
-                                        <td>
-                                            <?= $i+1;?>
-                                        </td>
-                                        <td>
-                                            <?php $pax_dato = Pasajero::find()->where(['id_pasajero'=>$pax[$i]['id_pasajero']])->one(); ?>    
-                                            <?= $pax_dato->nombre_apellido;?>
-                                        </td>
-                                        <td>
-                                            <?= $pax_dato->telefono;?>
-                                        </td>
-                                        <td>
-                                            <?= Yii::$app->formatter->asDate($pax[$i]['fecha'], 'php:d-m-Y') ?>
-                                        </td>
-                                        <td>
-                                            <?= $pax[$i]['hora']?>
-                                        </td>
-                                        <td>
-                                            <?= $pax[$i]['origen']?>
-                                        </td>
-                                        <td>
-                                            <?= $pax[$i]['destino']?>
-                                        </td>
-                                    </tr>
-                                    <?php
-                                }
-                                ?>
-                            </table>
-                           
-                        </fieldset>
-                    </div>
+    // Al cargar la página, verificar si ya tiene datos asignados
+    $(document).ready(function() {
+        let hasConductor = $('#select-conductor-manual').val();
+        let hasFlotaManual = $('#select-flota-manual').val();
+        let hasFlotaCombo = $('#servicios-id_flota').val();
 
+        // Si ya tiene conductor asignado manualmente, activamos modo manual
+        if (hasConductor && hasFlotaManual) {
+            switchMode('manual');
+            consultarCarga(hasConductor, 'conductor');
+        } else if (hasFlotaCombo) {
+            switchMode('combo');
+            consultarCarga(hasFlotaCombo, 'flota');
+        }
+    });
 
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-12">
-                        <fieldset>
-                        <legend>Agendar</legend>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <?php
-                                $flota = VFlota::find()->where(['asignado' =>1])->all();
+    $('.btn-mode').click(function() {
+        switchMode($(this).data('mode'));
+    });
 
-                                $lisflota = ArrayHelper::map($flota, 'id_conductor', 'flota_asignada_nombre');
+    function consultarCarga(id, tipo) {
+        if(!id) {
+            $('#carga-trabajo-container').fadeOut();
+            return;
+        }
+        $.get('" . Url::to(['get-servicios-conductor']) . "', {
+            id: id, 
+            tipo: tipo, 
+            fecha: '" . $model->fecha_servicio . "'
+        }, function(data) {
+            $('#carga-trabajo-list').html(data.html);
+            $('#carga-trabajo-container').fadeIn();
+        });
+    }
 
-                                echo $form->field($model, 'flota_conductor')->widget(Select2::classname(), [
-                                    'data' => $lisflota,
-                                    'pluginLoading' => false,
-                                    'value' => null,
-                                    'options' => ['placeholder' => 'Seleccione...'],
-                                    'pluginOptions' => [
-                                        'multiple' => false,
-                                        'allowClear' => true,
-                                    ],
-                                ]);
-                                echo $form->field($model, 'id_servicio')->hiddenInput(['readonly' => true, 'value'=>$model->id_servicio])->label(false);?>
-                                
-                            </div>
-                            
-                            <div class="col-md-6">
-                                <?php
-                                echo $form->field($model3, 'id_metodo')->widget(SwitchInput::classname(), [
-                                    'type' => SwitchInput::CHECKBOX,
-                                    'pluginOptions' => [
-                                        'handleWidth' => 60,
-                                        'offColor' => 'danger',
-                                        'onColor' => 'success',
-                                        'onText' => 'SI',
-                                        'offText' => 'NO'
-                                    ]
-                                ])->label('¿Pagará en efectivo?');
-                                echo $form->field($model, 'id_servicio')->hiddenInput(['readonly' => true, 'value' => $model->id_servicio])->label(false);
-                                ?>
-                               
-                            </div>
-                        </div>
-                               
-                        <div class="row">
-                            <div class="col-md-6">
-                                <?php
+    $('#servicios-id_flota').on('change', function() { consultarCarga($(this).val(), 'flota'); });
+    $('#select-conductor-manual').on('change', function() { consultarCarga($(this).val(), 'conductor'); });
+");
+?>
 
-                                $conductores = VConductores::find()->all();
-                                $lisconductores = ArrayHelper::map($conductores, 'id', 'datos');
-                                echo $form->field($model, 'id_conductor')->widget(Select2::classname(), [
-                                    'data' => $lisconductores,
-                                    'pluginLoading' => false,
-                                    'value' => null,
-                                    'options' => ['placeholder' => 'Seleccione...'],
-                                    'pluginOptions' => [
-                                        'multiple' => false,
-                                        'allowClear' => true,
-                                    ],
-                                ]);
-                                ?>
-                            </div>
-                            <div class="col-md-6">
-                                <?php
-                                $flota = VFlota::find()->where(['asignado' =>0])->all();
-                                $lisflota = ArrayHelper::map($flota, 'id_flota', 'nombre_flota');
-                                echo $form->field($model, 'id_flota')->widget(Select2::classname(), [
-                                    'data' => $lisflota,
-                                    'pluginLoading' => false,
-                                    'value' => null,
-                                    'options' => ['placeholder' => 'Seleccione...'],
-                                    'pluginOptions' => [
-                                        'multiple' => false,
-                                        'allowClear' => true,
-                                    ],
-                                ]);
-                                ?>
-                            </div>
-                        </div>
-
-                        <div class="row">   
-                            <div class="col-md-12">
-                                <?php echo $form->field($model2, 'observacion')->textarea(['rows' => 6]);?>
-                            </div>
-                        </div>
-                        </fieldset>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <div class="box-tools pull-right">
-                        <?= Html::a('<span class="glyphicon glyphicon-chevron-left"></span> <b>Regresar</b>', ['index'], ['class' => 'btn btn-warning btn']) ?>
-                        <?= Html::submitButton('<span class="glyphicon glyphicon-ok"></span> <b>Guardar</b>', ['class' => 'btn btn-primary btn']) ?>
-                    </div>
-                </div>
-
-                <?php ActiveForm::end(); ?>
-
-            </div>
-        </div>
+<div class="ticket-container">
+    <div class="ticket-header">
+        <span class="service-id-badge" style="background:#EA4C2D; padding:5px 12px; border-radius:20px; font-weight:800;">SERVICIO #<?= $model->id_servicio ?></span>
+        <h4 style="margin-top:12px; font-weight:800;">REVISAR ASIGNACIÓN</h4>
     </div>
 
-</div>
-
-<br>
-<?php
-/*
-if ($registros) {
-?>
-    <div class="box box-widget widget-user-2">
-        <div class="box box-purple">
-            <div class="box-body">
-                <div class="col-md-12">
-                    <table class='table table-bordered' width=100%>
-                        <tr style="background-color: #394B8B; color: white">
-                            <th>Fecha de Asignación</th>
-                            <th>Conductor</th>
-                            <th>Observación</th>
-                        </tr>
-                        <tr>
-                            <?php
-                            for ($i = 0; $i < count($registros); $i++) {
-                            ?>
-                        <tr>
-                            <td>
-                                <?php
-                                    $fecha = explode("-", $registros[$i]['fecha_asignacion']);
-                                    $fecha = $fecha[2] . "-" . $fecha[1] . "-" . $fecha[0];
-
-                                    echo $fecha;
-                                ?>
-                             </td>
-                            <td>
-                            <?php
-                                $conductor = VConductores::find()->where(['id' => $registros[$i]['id_conductor']])->one();
-                                echo $conductor->datos; ?>
-
-                            </td>
-                            <td>
-                            <?php
-                                $movflota = MovFlota::find()->where(['id_accion' => $registros[$i]['id_asignacion']])->one();
-                                echo $movflota->observacion; ?>
-
-                            </td>
-                       
-                            
-                        </tr>
-                    <?php
-                            }
-                    ?>
-
-                    </tr>
-                    </table>
-                </div>
-            </div>
+    <div class="ticket-body">
+        <div class="mode-switch">
+            <button type="button" class="btn-mode active" data-mode="combo">VÍNCULO FIJO</button>
+            <button type="button" class="btn-mode" data-mode="manual">ASIGNACIÓN LIBRE</button>
         </div>
-    <?php  }*/ ?>
+
+        <?php $form = ActiveForm::begin(['id' => 'form-despacho']); ?>
+
+        <div id="carga-trabajo-container">
+            <label style="font-size:10px; color:#94A3B8; text-transform:uppercase; font-weight: 800;">Carga actual del conductor:</label>
+            <div id="carga-trabajo-list"></div>
+        </div>
+
+        <?= $form->field($model, 'id_flota')->dropDownList($listaFlota, [
+            'prompt' => 'Seleccione Unidad/Conductor...',
+            'class' => 'form-control',
+            'id' => 'servicios-id_flota'
+        ])->label('Unidad Operativa Asignada') ?>
+
+        <div class="manual-selects" style="display:none;">
+            <?= $form->field($model, 'id_conductor')->dropDownList($listaConductores, [
+                'id' => 'select-conductor-manual',
+                'prompt' => '¿Quién conduce?',
+                'class' => 'form-control'
+            ])->label('Conductor') ?>
+            
+            <?= $form->field($model, 'id_flota')->dropDownList($listaTodasFlotas, [
+                'id' => 'select-flota-manual',
+                'prompt' => '¿En qué vehículo?',
+                'class' => 'form-control',
+                'style' => 'font-size: 12px;'
+            ])->label('Unidad Física') ?>
+        </div>
+
+        <?= Html::submitButton('<i class="fa fa-save"></i> ACTUALIZAR DESPACHO', ['class' => 'btn-assign']) ?>
+
+        <?php ActiveForm::end(); ?>
+    </div>
+</div>

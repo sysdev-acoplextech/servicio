@@ -5,6 +5,8 @@ use backend\models\Cliente;
 use backend\models\FormaPago;
 use backend\models\PasajeroServicio;
 use backend\models\BaseTipoVehiculo;
+use backend\models\Conductor;
+use backend\models\VFlota;
 
 // Librerías: FullCalendar
 $this->registerJsFile('https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js');
@@ -28,11 +30,10 @@ $this->registerCss("
     
     .card-servicio {
         background: #fff; border-radius: 20px; border: 1px solid #E2E8F0; overflow: hidden;
-        transition: transform 0.2s; position: relative;
+        transition: transform 0.2s; position: relative; padding-top: 5px;
     }
     .card-servicio:hover { transform: translateY(-5px); box-shadow: 0 12px 25px rgba(0,0,0,0.05); }
     
-    /* Alerta de Ruta Pendiente */
     .card-ruta-pendiente { border: 2px solid #F59E0B !important; }
     .tag-ruta-alerta { 
         position: absolute; top: 45px; right: 15px; background: #EF4444; color: white; 
@@ -41,9 +42,7 @@ $this->registerCss("
     }
 
     @keyframes pulse-red {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
+        0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; }
     }
 
     .card-tag { 
@@ -56,11 +55,20 @@ $this->registerCss("
     .pay-tag {
         position: absolute; top: 15px; left: 15px; padding: 4px 10px; 
         border-radius: 8px; font-size: 9px; font-weight: 800; text-transform: uppercase;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        z-index: 11;
     }
     .pay-total { background: #10B981; color: white; }
     .pay-parcial { background: #3B82F6; color: white; }
     .pay-deuda { background: #EF4444; color: white; }
+
+    /* Ajuste de etiqueta de despacho para evitar solapamiento */
+    .dispatch-tag {
+        position: absolute; top: 15px; left: 115px; padding: 4px 10px; 
+        border-radius: 8px; font-size: 9px; font-weight: 800; text-transform: uppercase;
+        z-index: 10;
+    }
+    .dispatch-assigned { background: #E0F2FE; color: #0369A1; border: 1px solid #bae6fd; }
+    .dispatch-none { background: #FFF1F2; color: #E11D48; border: 1px dashed #FECDD3; }
 
     .card-header-s { padding: 35px 20px 15px 20px; border-bottom: 1px solid #F1F5F9; }
     .card-client { font-size: 16px; font-weight: 800; color: #1E293B; display: block; }
@@ -70,7 +78,16 @@ $this->registerCss("
     .card-info-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: #475569; font-size: 13px; }
     .card-info-row i { color: #EA4C2D; width: 15px; }
 
-    #calendar { background: #fff; padding: 20px; border-radius: 20px; border: 1px solid #E2E8F0; }
+    .card-driver-info {
+        margin-top: 10px; padding-top: 10px; border-top: 1px dashed #E2E8F0;
+        display: flex; align-items: center; gap: 10px;
+    }
+    .driver-avatar {
+        width: 30px; height: 30px; background: #1B242D; color: white; 
+        border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px;
+    }
+
+    #calendar { background: #fff; padding: 20px; border-radius: 20px; border: 1px solid #E2E8F0; display: none; }
 ");
 
 $this->registerJs("
@@ -78,9 +95,13 @@ $this->registerJs("
         const view = $(this).data('view');
         $('.btn-view').removeClass('active');
         $(this).addClass('active');
-        $('.view-content').hide();
-        $('#view-' + view).fadeIn();
-        if(view === 'calendar') { calendar.render(); }
+        $('.view-content, #calendar').hide();
+        if(view === 'calendar') { 
+            $('#calendar').fadeIn();
+            calendar.render(); 
+        } else {
+            $('#view-' + view).fadeIn();
+        }
     });
 
     const calendarEl = document.getElementById('calendar');
@@ -128,11 +149,12 @@ $this->registerJs("
                 $esPagoTotalStatus = ($model->id_estatus == 7);
                 $pasajero = PasajeroServicio::find()->where(['id_servicio' => $model->id_servicio])->one();
 
-                // Lógica de validación de ruta
+                $conductor = !empty($model->id_conductor) ? Conductor::findOne($model->id_conductor) : null;
+                $vehiculo = !empty($model->id_flota) ? VFlota::findOne(['id_flota' => $model->id_flota]) : null;
+
                 $tieneRuta = ($pasajero && !empty($pasajero->origen) && !empty($pasajero->destino));
                 $alertaRuta = ($esConfirmado && !$tieneRuta);
 
-                // LÓGICA DE ETIQUETAS DE PAGO
                 $payTagHtml = '';
                 $faltante = $model->faltante;
                 $montoTotal = $model->monto;
@@ -143,13 +165,20 @@ $this->registerJs("
                     } elseif ($faltante > 0 && $faltante < $montoTotal) {
                         $payTagHtml = '<div class="pay-tag pay-parcial"><i class="fa fa-warning"></i> Pago Parcial</div>';
                     } else {
-                        $payTagHtml = '<div class="pay-tag pay-deuda"><i class="fa fa-hourglass-start"></i> Esperando Pago</div>';
+                        $payTagHtml = '<div class="pay-tag pay-deuda"><i class="fa fa-hourglass-start"></i> Deuda</div>';
                     }
+                } else {
+                    $payTagHtml = '<div class="pay-tag pay-deuda" style="background:#94a3b8;"><i class="fa fa-clock-o"></i> Agendado</div>';
                 }
             ?>
                 <div class="card-servicio <?= $alertaRuta ? 'card-ruta-pendiente' : '' ?>">
                     <?= $payTagHtml ?>
                     
+                    <div class="dispatch-tag <?= $conductor ? 'dispatch-assigned' : 'dispatch-none' ?>">
+                        <i class="fa <?= $conductor ? 'fa-id-card' : 'fa-user-times' ?>"></i> 
+                        <?= $conductor ? 'Asignado' : 'Sin Chofer' ?>
+                    </div>
+
                     <?php if ($alertaRuta): ?>
                         <div class="tag-ruta-alerta"><i class="fa fa-exclamation-triangle"></i> RUTA PENDIENTE</div>
                     <?php endif; ?>
@@ -169,23 +198,23 @@ $this->registerJs("
                             <b><?= Yii::$app->formatter->asDate($model->fecha_servicio, 'medium') ?></b>
                         </div>
 
-                        <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px;">
-                            <div class="card-info-row" style="margin-bottom: 0; flex: 1;">
-                                <i class="fa fa-money"></i> 
-                                <span style="font-size: 0.9em;">Pago: <?= $fp ? $fp->descripcion : 'N/A' ?></span>
+                        <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+                                <i class="fa fa-money" style="color: #EA4C2D;"></i> 
+                                <span style="font-size: 11px; font-weight: 600;"><?= $fp ? mb_strtoupper($fp->descripcion) : 'N/A' ?></span>
                             </div>
-                            <div class="card-info-row" style="margin-bottom: 0; flex: 1; border-left: 1px solid #eee; padding-left: 10px;">
-                                <i class="fa fa-car"></i> 
-                                <span style="font-size: 0.9em;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex: 1; border-left: 1px solid #eee; padding-left: 10px;">
+                                <i class="fa fa-car" style="color: #EA4C2D;"></i> 
+                                <span style="font-size: 11px; font-weight: 600;">
                                     <?php 
                                     $tipoVehiculo = BaseTipoVehiculo::findOne($model->id_tipo_vehiculo);
-                                    echo $tipoVehiculo ? $tipoVehiculo->nombre_tipo_vehiculo : 'N/A';
+                                    echo $tipoVehiculo ? mb_strtoupper($tipoVehiculo->nombre_tipo_vehiculo) : 'N/A';
                                     ?>
                                 </span>
                             </div>
                         </div>
 
-                        <?php if ($pasajero && !empty($pasajero->google_map)): 
+                         <?php if ($pasajero && !empty($pasajero->google_map)): 
                             $query = trim($pasajero->google_map);
                             $urlMaps = "https://www.google.com/maps/search/?api=1&query=" . rawurlencode($query);
                         ?>
@@ -196,49 +225,67 @@ $this->registerJs("
                         <?php endif; ?>
 
                         <div class="card-info-row">
-                            <i class="fa fa-arrow-circle-left "></i> 
-                            <span style="<?= empty($pasajero->origen) ? 'color:#EF4444; font-weight:bold;' : '' ?>">
+                            <i class="fa fa-arrow-circle-left"></i> 
+                            <span style="font-size: 11px; <?= empty($pasajero->origen) ? 'color:#EF4444; font-weight:bold;' : '' ?>">
                                 Origen: <?= ($pasajero && !empty($pasajero->origen)) ? $pasajero->origen : 'SIN ASIGNAR' ?>
                             </span>
                         </div>
                         <div class="card-info-row">
-                            <i class="fa fa-arrow-circle-right "></i> 
-                            <span style="<?= empty($pasajero->destino) ? 'color:#EF4444; font-weight:bold;' : '' ?>">
+                            <i class="fa fa-arrow-circle-right"></i> 
+                            <span style="font-size: 11px; <?= empty($pasajero->destino) ? 'color:#EF4444; font-weight:bold;' : '' ?>">
                                 Destino: <?= ($pasajero && !empty($pasajero->destino)) ? $pasajero->destino : 'SIN ASIGNAR' ?>
                             </span>
                         </div>
-                        
-                        <?php if (($esConfirmado || $esPagoTotalStatus) && $model->id_forma_pago != 3 && $montoTotal > 0): 
-                            $porcentaje = $esPagoTotalStatus ? 100 : ((($montoTotal - $faltante) / $montoTotal) * 100);
-                        ?>
-                        <div class="progress" style="height: 4px; margin-top: 10px; margin-bottom: 10px; background: #eee; border-radius: 2px;">
-                            <div class="progress-bar" style="width: <?= $porcentaje ?>%; background: #00a65a;"></div>
-                        </div>
-                        <?php endif; ?>
 
-                        <div style="margin-top: 15px; display: flex; gap: 8px;">
+                        <div class="card-driver-info">
+                            <div class="driver-avatar">
+                                <i class="fa <?= $conductor ? 'fa-user' : 'fa-user-secret' ?>"></i>
+                            </div>
+                            <div style="flex: 1;">
+                                <div style="font-size: 11px; font-weight: 800; color: #1E293B;">
+                                    <?= $conductor ? mb_strtoupper($conductor->nombres . ' ' . $conductor->apellidos) : 'CHOFER POR ASIGNAR' ?>
+                                </div>
+                                <?php if ($vehiculo): ?>
+                                    <div style="font-size: 9px; color: #EA4C2D; font-weight: 700;">
+                                        <i class="fa fa-bus"></i> <?= $vehiculo->placa ?> | <?= $vehiculo->nombre_marca ?>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 15px; display: flex; gap: 5px; flex-wrap: wrap;">
                             <?= Html::a('<i class="fa fa-eye"></i>', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-default btn-sm', 'style' => 'border-radius:10px; font-weight:700; padding: 5px 12px;']) ?>
                             
+                            <?php if ($cli && $cli->telefono_principal): ?>
+                                <?= Html::a('<i class="fa fa-whatsapp"></i>', "https://api.whatsapp.com/send?phone=" . preg_replace('/[^0-9]/', '', $cli->telefono_principal), [
+                                    'class' => 'btn btn-success btn-sm', 
+                                    'target' => '_blank',
+                                    'style' => 'border-radius:10px; background:#25D366; border:none; color:white; padding: 5px 12px;'
+                                ]) ?>
+                            <?php endif; ?>
+
                             <?php if (!$esConfirmado && !$esPagoTotalStatus): ?>
                                 <?= Html::a('<i class="fa fa-check"></i>', ['confirmar', 'id' => $model->id_servicio], [
                                     'class' => 'btn btn-warning btn-sm',
-                                    'title' => 'Confirmar Servicio',
                                     'style' => 'border-radius:10px; background:#F59E0B; border:none; color:white; padding: 5px 12px;',
-                                    'data' => [
-                                        'confirm' => '¿Estás seguro de que deseas CONFIRMAR este servicio?',
-                                        'method' => 'post',
-                                    ],
+                                    'data' => ['confirm' => '¿Confirmar servicio?', 'method' => 'post'],
                                 ]) ?>
                             <?php endif; ?>
 
                             <?= Html::a('<i class="fa fa-money"></i>', ['pagar', 'id' => $model->id_servicio], ['class' => 'btn btn-success btn-sm', 'style' => 'border-radius:10px; background:#10B981; border:none; color:white; padding: 5px 12px;']) ?>
                             <?= Html::a('<i class="fa fa-pencil"></i>', ['update', 'id' => $model->id_servicio], ['class' => 'btn btn-info btn-sm', 'style' => 'border-radius:10px; background:#3B82F6; border:none; color:white; padding: 5px 12px;']) ?>
-                            <?= Html::a('<i class="fa fa-user-plus"></i>', ['agendar', 'id' => $model->id_servicio], ['class' => 'btn btn-primary btn-sm', 'style' => 'border-radius:10px; background:#6366F1; border:none; color:white; padding: 5px 12px;']) ?>
-                            <?= Html::a('<i class="fa fa-whatsapp"></i>', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-success btn-sm', 'style' => 'border-radius:10px; background:#25D366; border:none; color:white; padding: 5px 12px;']) ?>
+                            
+                            <?= Html::a('<i class="fa fa-user-plus"></i>', ['agendar', 'id' => $model->id_servicio], [
+                                'class' => 'btn btn-primary btn-sm', 
+                                'style' => 'border-radius:10px; background:' . ($conductor ? '#0369A1' : '#6366F1') . '; border:none; color:white; padding: 5px 12px;',
+                                'title' => $conductor ? 'Cambiar Asignación' : 'Asignar Chofer'
+                            ]) ?>
                         </div>
                     </div>
                 </div>
             <?php endforeach; ?>
         </div>
     </div>
+
+    <div id="calendar"></div>
 </div>

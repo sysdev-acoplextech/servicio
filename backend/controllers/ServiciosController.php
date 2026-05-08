@@ -18,6 +18,8 @@ use backend\models\Tasadia;
 use backend\models\VariablesServicio;
 use backend\models\VFlota;
 use backend\models\VServicios;
+use backend\models\Conductor;
+use backend\models\Flota;
 use backend\models\VServiciosProyecto;
 use backend\models\ServicioVariable;
 use backend\models\DetalleTarifario;
@@ -26,6 +28,7 @@ use yii\web\Controller;
 use yii\web\NotFoundHttpException;
 use yii\filters\VerbFilter;
 use yii\web\Response;
+use yii\helpers\ArrayHelper;
 
 /**
  * ServiciosController implements the CRUD actions for Servicios model.
@@ -1170,7 +1173,7 @@ class ServiciosController extends Controller
         ]);
     }
 
-    public function actionAgendar($id)
+    public function actionAgendar_old($id)
     {
         $model = $this->findModel($id);
 
@@ -1977,4 +1980,72 @@ class ServiciosController extends Controller
         // Redireccionamos siempre al index para que permanezca en la misma vista
         return $this->redirect(['index']);
     }
+
+    public function actionAgendar($id)
+    {
+        $model = $this->findModel($id);
+        
+        // 1. LISTA COMBO: Solo flotas que TIENEN un conductor asignado (v_flota hace LEFT JOIN, filtramos los que tengan ID conductor)
+        $dataCombo = VFlota::find()->where(['not', ['id_conductor' => null]])->all();
+        $listaFlotaAsignada = ArrayHelper::map($dataCombo, 'id_flota', 'flota_asignada_nombre');
+
+        // 2. LISTA MANUAL - CONDUCTORES: Extraemos los conductores únicos de la tabla conductor
+        $listaConductores = ArrayHelper::map(Conductor::find()->all(), 'id', function($c) {
+            return $c->nombres . ' ' . $c->apellidos;
+        });
+
+        // 3. LISTA MANUAL - FLOTAS: Todas las flotas disponibles en la vista usando 'nombre_flota'
+        // nombre_flota según tu SQL: placa + tipo + marca + color
+        $dataTodasFlotas = VFlota::find()->all();
+        $listaTodasFlotas = ArrayHelper::map($dataTodasFlotas, 'id_flota', 'nombre_flota');
+
+        if ($model->load(Yii::$app->request->post())) {
+            // Si la selección fue manual, el id_conductor ya viene en el POST
+            // Si fue por combo, debemos asegurar que el id_conductor se guarde basado en la flota
+            if (empty($model->id_conductor) && !empty($model->id_flota)) {
+                $vf = VFlota::findOne(['id_flota' => $model->id_flota]);
+                if ($vf) { $model->id_conductor = $vf->id_conductor; }
+            }
+
+            if ($model->save()) {
+                return $this->redirect(['view', 'id' => $model->id_servicio]);
+            }
+        }
+
+        return $this->render('agendar', [
+            'model' => $model,
+            'listaFlota' => $listaFlotaAsignada,
+            'listaConductores' => $listaConductores,
+            'listaTodasFlotas' => $listaTodasFlotas,
+        ]);
+    }
+
+    public function actionGetServiciosConductor($id, $tipo, $fecha)
+{
+    Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+    
+    $id_conductor = $id;
+    
+    // Si el ID viene de la flota, buscamos quién es el conductor de esa flota en la vista
+    if ($tipo == 'flota') {
+        $flota = VFlota::findOne(['id_flota' => $id]);
+        $id_conductor = $flota ? $flota->id_conductor : null;
+    }
+
+    $servicios = \backend\models\Servicios::find()
+        ->where(['id_conductor' => $id_conductor, 'fecha_servicio' => $fecha])
+        ->all();
+        
+    $html = "";
+    if ($servicios) {
+        $html .= "<p style='color:#EA4C2D; font-size:10px; margin-bottom:5px;'>⚠️ Ocupado en estos horarios:</p>";
+        foreach ($servicios as $s) {
+            $html .= "<div class='info-mini-ticket'>#{$s->id_servicio} - Conf: " . ($s->id_estatus == 11 ? 'SI' : 'NO') . "</div>";
+        }
+    } else {
+        $html = "<div class='text-success'><i class='fa fa-check-circle'></i> Disponible para esta fecha</div>";
+    }
+    
+    return ['html' => $html];
+}
 }
