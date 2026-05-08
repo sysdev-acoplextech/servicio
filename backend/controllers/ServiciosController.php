@@ -2021,31 +2021,31 @@ class ServiciosController extends Controller
     }
 
     public function actionGetServiciosConductor($id, $tipo, $fecha)
-{
-    Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
-    
-    $id_conductor = $id;
-    
-    // Si el ID viene de la flota, buscamos quién es el conductor de esa flota en la vista
-    if ($tipo == 'flota') {
-        $flota = VFlota::findOne(['id_flota' => $id]);
-        $id_conductor = $flota ? $flota->id_conductor : null;
-    }
-
-    $servicios = \backend\models\Servicios::find()
-        ->where(['id_conductor' => $id_conductor, 'fecha_servicio' => $fecha])
-        ->all();
+    {
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
         
-    $html = "";
-    if ($servicios) {
-        $html .= "<p style='color:#EA4C2D; font-size:10px; margin-bottom:5px;'>⚠️ Ocupado en estos horarios:</p>";
-        foreach ($servicios as $s) {
-            $html .= "<div class='info-mini-ticket'>#{$s->id_servicio} - Conf: " . ($s->id_estatus == 11 ? 'SI' : 'NO') . "</div>";
+        $id_conductor = $id;
+        
+        // Si el ID viene de la flota, buscamos quién es el conductor de esa flota en la vista
+        if ($tipo == 'flota') {
+            $flota = VFlota::findOne(['id_flota' => $id]);
+            $id_conductor = $flota ? $flota->id_conductor : null;
         }
-    } else {
-        $html = "<div class='text-success'><i class='fa fa-check-circle'></i> Disponible para esta fecha</div>";
+
+        $servicios = \backend\models\Servicios::find()
+            ->where(['id_conductor' => $id_conductor, 'fecha_servicio' => $fecha])
+            ->all();
+            
+        $html = "";
+        if ($servicios) {
+            $html .= "<p style='color:#EA4C2D; font-size:10px; margin-bottom:5px;'>⚠️ Ocupado en estos horarios:</p>";
+            foreach ($servicios as $s) {
+                $html .= "<div class='info-mini-ticket'>#{$s->id_servicio} - Conf: " . ($s->id_estatus == 11 ? 'SI' : 'NO') . "</div>";
+            }
+        } else {
+            $html = "<div class='text-success'><i class='fa fa-check-circle'></i> Disponible para esta fecha</div>";
+        }
+        
+        return ['html' => $html];
     }
-    
-    return ['html' => $html];
-}
 }

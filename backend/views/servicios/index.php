@@ -26,6 +26,13 @@ $this->registerCss("
     }
     .view-switcher .btn-view.active { background: #fff; color: #1B242D; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
 
+    /* Estilo para el botón de filtro */
+    .btn-filter-dropdown {
+        border-radius: 15px; padding: 10px 20px; font-weight: bold; 
+        background: #F1F5F9; border: 1px solid #E2E8F0; color: #475569;
+    }
+    .btn-filter-dropdown:hover { background: #E2E8F0; }
+
     .grid-servicios { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
     
     .card-servicio {
@@ -61,7 +68,6 @@ $this->registerCss("
     .pay-parcial { background: #3B82F6; color: white; }
     .pay-deuda { background: #EF4444; color: white; }
 
-    /* Ajuste de etiqueta de despacho para evitar solapamiento */
     .dispatch-tag {
         position: absolute; top: 15px; left: 115px; padding: 4px 10px; 
         border-radius: 8px; font-size: 9px; font-weight: 800; text-transform: uppercase;
@@ -109,7 +115,7 @@ $this->registerJs("
         initialView: 'dayGridMonth',
         locale: 'es',
         headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek,timeGridDay' },
-        events: " . json_encode($eventosCalendario) . ",
+        events: " . json_encode($eventosCalendario ?? []) . ",
         eventClick: function(info) {
             window.location.href = '" . Url::to(['view']) . "?id=' + info.event.id;
         }
@@ -120,21 +126,46 @@ $this->registerJs("
 <div class="servicios-index">
 
     <div class="control-panel">
-        <div class="row" style="display: flex; align-items: center;">
-            <div class="col-md-4">
+        <div class="row" style="display: flex; align-items: center; flex-wrap: wrap;">
+            <div class="col-md-3">
                 <h3 style="margin: 0; font-weight: 800; color: #1B242D;">Logística de Servicios</h3>
             </div>
-            <div class="col-md-4 text-center">
+            
+            <div class="col-md-3 text-center">
                 <div class="view-switcher">
                     <button class="btn-view active" data-view="grid"><i class="fa fa-th-large"></i> Tarjetas</button>
                     <button class="btn-view" data-view="list"><i class="fa fa-list"></i> Lista</button>
                     <button class="btn-view" data-view="calendar"><i class="fa fa-calendar"></i> Agenda</button>
                 </div>
             </div>
-            <div class="col-md-4 text-right">
+
+            <div class="col-md-6 text-right">
+                <div class="dropdown" style="display: inline-block; margin-right: 5px;">
+                    <button class="btn btn-default dropdown-toggle btn-filter-dropdown" type="button" data-toggle="dropdown">
+                        <i class="fa fa-filter"></i> Filtrar <span class="caret"></span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-right" style="border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border: none; padding: 10px;">
+                        <li class="dropdown-header">ESTATUS DE SERVICIO</li>
+                        <li><?= Html::a('⏳ Agendados', ['index', 'ServiciosSearch[id_estatus]' => 5]) ?></li>
+                        <li><?= Html::a('✅ Confirmados', ['index', 'ServiciosSearch[id_estatus]' => 11]) ?></li>
+                        <li><?= Html::a('🔄 En Proceso', ['index', 'ServiciosSearch[id_estatus]' => 9]) ?></li>
+                        <li class="divider"></li>
+                        <li class="dropdown-header">ESTATUS DE PAGO</li>
+                        <li><?= Html::a('💰 Pagados Total', ['index', 'ServiciosSearch[id_estatus]' => 7]) ?></li>
+                        <li><?= Html::a('💸 Con Deuda', ['index', 'ServiciosSearch[id_estatus]' => 6]) ?></li>
+                        <li class="divider"></li>
+                        <li><?= Html::a('<i class="fa fa-refresh"></i> Ver Todos', ['index'], ['class' => 'text-primary']) ?></li>
+                    </ul>
+                </div>
+
+                <?= Html::a('<i class="fa fa-calculator"></i> CÁLCULO RÁPIDO', ['cotizacion-rapida/create'], [
+                    'class' => 'btn btn-default',
+                    'style' => 'border-radius:15px; padding: 10px 20px; font-weight:bold; color: #475569; margin-right: 5px;'
+                ]) ?>
+
                 <?= Html::a('<i class="fa fa-plus"></i> NUEVO SERVICIO', ['create'], [
                     'class' => 'btn btn-success',
-                    'style' => 'border-radius:15px; padding: 10px 25px; font-weight:bold; background: #10B981; border:none;'
+                    'style' => 'border-radius:15px; padding: 10px 25px; font-weight:bold; background: #10B981; border:none; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);'
                 ]) ?>
             </div>
         </div>
@@ -214,16 +245,6 @@ $this->registerJs("
                             </div>
                         </div>
 
-                         <?php if ($pasajero && !empty($pasajero->google_map)): 
-                            $query = trim($pasajero->google_map);
-                            $urlMaps = "https://www.google.com/maps/search/?api=1&query=" . rawurlencode($query);
-                        ?>
-                            <a href="<?= $urlMaps ?>" target="_blank" rel="noopener noreferrer" class="btn btn-xs" 
-                               style="display: block; width: 100%; margin-bottom: 15px; background: #0EA5E9; color: white; font-weight: 800; font-size: 10px; border-radius: 20px; border: none; padding: 8px; text-align: center;">
-                                <i class="fa fa-map-o"></i> ABRIR RUTA EN MAPS
-                            </a>
-                        <?php endif; ?>
-
                         <div class="card-info-row">
                             <i class="fa fa-arrow-circle-left"></i> 
                             <span style="font-size: 11px; <?= empty($pasajero->origen) ? 'color:#EF4444; font-weight:bold;' : '' ?>">
@@ -256,12 +277,16 @@ $this->registerJs("
                         <div style="margin-top: 15px; display: flex; gap: 5px; flex-wrap: wrap;">
                             <?= Html::a('<i class="fa fa-eye"></i>', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-default btn-sm', 'style' => 'border-radius:10px; font-weight:700; padding: 5px 12px;']) ?>
                             
-                            <?php if ($cli && $cli->telefono_principal): ?>
-                                <?= Html::a('<i class="fa fa-whatsapp"></i>', "https://api.whatsapp.com/send?phone=" . preg_replace('/[^0-9]/', '', $cli->telefono_principal), [
-                                    'class' => 'btn btn-success btn-sm', 
-                                    'target' => '_blank',
-                                    'style' => 'border-radius:10px; background:#25D366; border:none; color:white; padding: 5px 12px;'
-                                ]) ?>
+                            <?php if (($esConfirmado || $esPagoTotalStatus) && $conductor): 
+                                $telConductor = $conductor->telefono_principal ?? $conductor->telefono_alterno ?? '';
+                                if (!empty($telConductor)): ?>
+                                    <?= Html::a('<i class="fa fa-whatsapp"></i>', "https://api.whatsapp.com/send?phone=" . preg_replace('/[^0-9]/', '', $telConductor), [
+                                        'class' => 'btn btn-success btn-sm', 
+                                        'target' => '_blank',
+                                        'style' => 'border-radius:10px; background:#25D366; border:none; color:white; padding: 5px 12px;',
+                                        'title' => 'WhatsApp Conductor'
+                                    ]) ?>
+                                <?php endif; ?>
                             <?php endif; ?>
 
                             <?php if (!$esConfirmado && !$esPagoTotalStatus): ?>
@@ -287,5 +312,41 @@ $this->registerJs("
         </div>
     </div>
 
+     <!-- VISTA LISTA -->
+    <div id="view-list" class="view-content" style="display: none;">
+        <div class="control-panel" style="padding: 0; overflow: hidden;">
+            <table class="table" style="margin-bottom: 0;">
+                <thead style="background: #F8FAFC;">
+                    <tr style="color: #64748B; font-size: 11px; text-transform: uppercase;">
+                        <th class="text-center">ID</th>
+                        <th>Cliente</th>
+                        <th>Fecha</th>
+                        <th>Forma de Pago</th>
+                        <th class="text-right">Monto</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($dataProvider->getModels() as $model): ?>
+                        <tr>
+                            <td class="text-center"><b>#<?= $model->id_servicio ?></b></td>
+                            <td><b><?= Cliente::findOne($model->id_cliente)->nombre_apellido ?? 'N/A' ?></b></td>
+                            <td><?= Yii::$app->formatter->asDate($model->fecha_servicio, 'medium') ?></td>
+                            <td><?= FormaPago::findOne($model->id_forma_pago)->descripcion ?? 'N/A' ?></td>
+                            <td class="text-right"><b>$ <?= number_format($model->monto, 2, ',', '.') ?></b></td>
+                            <td class="text-right">
+                                <?= Html::a('<i class="fa fa-eye"></i>', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-xs btn-default', 'style' => 'border-radius:8px;']) ?>
+                                <!-- BOTÓN MODIFICAR EN LISTA -->
+                                <?= Html::a('<i class="fa fa-pencil"></i>', ['update', 'id' => $model->id_servicio], ['class' => 'btn btn-xs btn-info', 'style' => 'border-radius:8px; margin-left:5px;']) ?>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <div id="calendar"></div>
+
+    
 </div>
