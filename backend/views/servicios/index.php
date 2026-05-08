@@ -146,6 +146,7 @@ $this->registerJs("
                     </button>
                     <ul class="dropdown-menu dropdown-menu-right" style="border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border: none; padding: 10px;">
                         <li class="dropdown-header">ESTATUS DE SERVICIO</li>
+                        <li><?= Html::a('⭐ Hoy', ['index', 'ServiciosSearch[fecha_servicio]' => date('Y-m-d')]) ?></li>
                         <li><?= Html::a('⏳ Agendados', ['index', 'ServiciosSearch[id_estatus]' => 5]) ?></li>
                         <li><?= Html::a('✅ Confirmados', ['index', 'ServiciosSearch[id_estatus]' => 11]) ?></li>
                         <li><?= Html::a('🔄 En Proceso', ['index', 'ServiciosSearch[id_estatus]' => 9]) ?></li>

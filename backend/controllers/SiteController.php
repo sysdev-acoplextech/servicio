@@ -37,7 +37,7 @@ class SiteController extends Controller
                         'allow' => true,
                     ],
                     [
-                        'actions' => ['logout', 'index', 'index-lp', 'qr'],
+                        'actions' => ['logout', 'index', 'index-lp', 'qr','configuraciones'],
                         'allow' => true,
                         'roles' => ['@'],
                     ],
@@ -88,84 +88,74 @@ class SiteController extends Controller
      * @return string
      */
 
-    public function actionIndex()
-    {
-        // Obtener datos para el dashboard
+public function actionIndex()
+{
+    $connection = \Yii::$app->db;
+    $hoy = date('Y-m-d');
+    $mes = date('n');
+    $anio = date('Y');
 
-        // Conteo por Servicios
+    // 1. Tasa del Día
+    $tasaDia = \backend\models\Tasadia::find()
+        ->where(['id_estatus' => 1])
+        ->orderBy(['fecha_hora' => SORT_DESC])
+        ->one();
 
-        $fuentefinan  = Servicios::find()
-        ->select([
-        new Expression('count(id_servicio) as id_servicio'), 
-        'id_estatus'
-        ])  
-        ->groupBy([ 'id_estatus'])
-        ->orderBy( 'id_estatus')
+    // 2. Contadores de Servicios (Por Estatus)
+    // Asumiendo que: 1 = Agendado/Pendiente, 2 = Confirmado, 3 = Concretado/Finalizado
+    $serviciosAgendados = \backend\models\Servicios::find()->where(['id_estatus' => 5])->count();
+    $serviciosConfirmados = \backend\models\Servicios::find()->where(['confirmado' => TRUE])->count();
+    $serviciosHoy = \backend\models\Servicios::find()->where(['fecha_servicio' => $hoy])->count();
+
+    // 3. Finanzas del Día
+    $pagosHoyCount = \backend\models\ServicioPago::find()
+        ->where(['date(fecha_pago)' => $hoy])
+        ->count();
+
+    $montoMes = $connection->createCommand("SELECT SUM(monto) FROM servicio_pago WHERE MONTH(fecha_pago) = $mes AND YEAR(fecha_pago) = $anio")->queryScalar() ?: 0;
+
+    // 4. Tipos de Pago Recibidos HOY
+    $tiposPagoHoy = \backend\models\ServicioPago::find()
+        ->select([new \yii\db\Expression('count(id_pago) as id_servicio'), 'tipo_pago'])
+        ->where(['date(fecha_pago)' => $hoy])
+        ->groupBy(['tipo_pago'])
         ->all();
 
-        
-        $servicios  = Servicios::find()->count();
-        $servicios_mes  = Servicios::find()->where(['MONTH(fecha_registro)'=> date('n')])->count();
-
-        $connection = \Yii::$app->db;
-        $cliente=$connection->createCommand("SELECT sum(monto) as monto
-        FROM servicio_pago 
-        where  YEAR(fecha_pago)=" . date('Y'));
-        $servicios_monto= $cliente->queryOne();
-
-        $connection = \Yii::$app->db;
-        $cliente=$connection->createCommand("SELECT sum(monto) as monto
-        FROM servicio_pago a 
-        where  MONTH(a.fecha_pago) =". date('n') ." and YEAR(a.fecha_pago)=" . date('Y'));
-        $servicios_monto_mes= $cliente->queryOne();
-
-        //Por tipo de pago
-        $tipopago  = ServicioPago::find()
-        ->select([
-        new Expression('count(id_servicio) as id_servicio'), 
-        'tipo_pago'
-        ])  
-        ->where([ 'MONTH(fecha_pago)'=> date('n'), 'YEAR(fecha_pago)'=> date('Y')])
-        ->groupBy([ 'tipo_pago'])
-        ->orderBy( 'tipo_pago')
-        ->all();
-
-        //Por tipo de vehiculo
-
-        $tipovehiculo  = VServicios::find()
-        ->select([
-        new Expression('count(id_servicio) as id_servicio'), 
-        'nombre_tipo_vehiculo'
-        ])  
-        ->where([ 'MONTH(fecha_registro)'=> date('n'), 'YEAR(fecha_registro)'=> date('Y')])
-        ->groupBy([ 'nombre_tipo_vehiculo'])
-        ->orderBy( 'nombre_tipo_vehiculo')
-        ->all();
-
-        //Por conductor
-
-        $conductor  = VServicios::find()
-        ->select([
-        new Expression('count(id_servicio) as id_servicio'), 
-        'conductor'
-        ])  
-        ->where([ 'MONTH(fecha_registro)'=> date('n'), 'YEAR(fecha_registro)'=> date('Y')])
-        ->andwhere([ 'is not', 'conductor', null])        
-        ->groupBy([ 'conductor'])
-        ->orderBy( 'conductor')
-        ->all();
-
-        return $this->render('../dashboard/index', [
-            'fuentefinan' => $fuentefinan,
-            'servicios' => $servicios,
-            'servicios_mes' => $servicios_mes,
-            'servicios_monto' => $servicios_monto,
-            'servicios_monto_mes' => $servicios_monto_mes,
-            'tipopago' => $tipopago,
-            'tipovehiculo' => $tipovehiculo,
-            'conductor' => $conductor,
-        ]);
+    // 5. Gráfico: Histórico 6 meses
+    $salesData = [];
+    for ($i = 5; $i >= 0; $i--) {
+        $m = date('n', strtotime("-$i months"));
+        $y = date('Y', strtotime("-$i months"));
+        $monto = $connection->createCommand("SELECT SUM(monto) FROM servicio_pago WHERE MONTH(fecha_pago) = $m AND YEAR(fecha_pago) = $y")->queryScalar() ?: 0;
+        $salesData[] = ['month' => date('M', strtotime("-$i months")), 'total_sales' => $monto];
     }
+
+    // 6. Ranking de Conductores (Mes)
+   $conductoresActivos = \backend\models\VServicios::find()
+    ->select([
+        new \yii\db\Expression('count(id_servicio) as total'), 
+        'conductor',
+        'foto' // Asegúrate de incluir el campo de la imagen aquí
+    ])
+    ->where(['MONTH(fecha_registro)' => date('n'), 'YEAR(fecha_registro)' => date('Y')])
+    ->andWhere(['is not', 'conductor', null])
+    ->groupBy(['conductor', 'foto']) // Añade foto al groupBy
+    ->orderBy(['total' => SORT_DESC])
+    ->limit(6)
+    ->all();
+
+    return $this->render('../dashboard/index', [
+        'tasaDia' => $tasaDia,
+        'serviciosAgendados' => $serviciosAgendados,
+        'serviciosConfirmados' => $serviciosConfirmados,
+        'serviciosHoy' => $serviciosHoy,
+        'pagosHoyCount' => $pagosHoyCount,
+        'montoMes' => $montoMes,
+        'tiposPagoHoy' => $tiposPagoHoy,
+        'salesData' => $salesData,
+        'conductoresActivos' => $conductoresActivos,
+    ]);
+}
     /**
      * Login action.
      *
@@ -244,5 +234,28 @@ class SiteController extends Controller
         $mpdf->SetHTMLFooter($footer);
         $mpdf->WriteHtml($content); // call mpdf write html
         echo $mpdf->Output($modelempr->nombre . '-' . $model->correlativo_finiquito . '.pdf', 'I');
+    }
+
+    public function actionConfiguraciones()
+    {
+        // 1. Recopilamos estadísticas para que las cards no muestren "0"
+        // Nota: Asegúrate de que estos modelos existan en tu proyecto
+        
+        $stats = [
+            'totalVehiculos' => \backend\models\BaseTipoVehiculo::find()->count(),
+            'totalMetodos'   => \backend\models\BaseMetodosPago::find()->count(),
+            'totalClientes'  => \backend\models\BaseTipoCliente::find()->count(),
+            'totalServicios' => \backend\models\TipoServicio::find()->count(),
+            'totalRutas'     => \backend\models\TipoRuta::find()->count(),
+        ];
+
+        // 2. Renderizamos la vista ubicada en site/configuraciones
+        return $this->render('configuraciones', [
+            'totalVehiculos' => $stats['totalVehiculos'],
+            'totalMetodos'   => $stats['totalMetodos'],
+            'totalClientes'  => $stats['totalClientes'],
+            'totalServicios' => $stats['totalServicios'],
+            'totalRutas'     => $stats['totalRutas'],
+        ]);
     }
 }

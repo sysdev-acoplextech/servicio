@@ -50,6 +50,8 @@ class VServicios extends \yii\db\ActiveRecord
      * {@inheritdoc}
      */
 
+    public $total;
+
     public $fecha_registro_desde;
     public $fecha_registro_hasta;
     public $fecha_servicio_desde;
