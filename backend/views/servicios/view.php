@@ -3,6 +3,7 @@ use backend\models\Pasajero;
 use backend\models\PasajeroServicio;
 use backend\models\Conductor;
 use backend\models\VFlota;
+use backend\models\ServicioPago; // Asegúrate de que el modelo existe
 use yii\helpers\Html;
 use yii\helpers\Url;
 
@@ -10,9 +11,12 @@ use yii\helpers\Url;
 
 $paxs = PasajeroServicio::find()->where(['id_servicio' => $model->id_servicio])->all();
 
-// Datos del Conductor y Vehículo según tu tabla 'conductor'
+// Datos del Conductor y Vehículo
 $conductor = !empty($model->id_conductor) ? Conductor::findOne($model->id_conductor) : null;
 $vehiculo = !empty($model->id_flota) ? VFlota::findOne(['id_flota' => $model->id_flota]) : null;
+
+// Obtener observación de pago
+$pago = ServicioPago::find()->where(['id_servicio' => $model->id_servicio])->one();
 
 // Preparación de texto para WhatsApp
 $textoWhatsapp = "🚐 *HOJA DE RUTA - CH GROUP*\n";
@@ -22,7 +26,7 @@ foreach ($paxs as $idx => $p) {
     $p_info = Pasajero::findOne($p->id_pasajero);
     $n = $idx + 1;
     $textoWhatsapp .= "*RUTA {$n}* - {$p->hora}\n";
-    $textoWhatsapp .= "👤 {$p_info->nombre_apellido}\n";
+    $textoWhatsapp .= "👤 " . ($p_info ? $p_info->nombre_apellido : 'N/A') . "\n";
     $textoWhatsapp .= "📍 Origen: {$p->origen}\n";
     $textoWhatsapp .= "🏁 Destino: {$p->destino}\n\n";
 }
@@ -33,9 +37,9 @@ foreach ($paxs as $idx => $p) {
 <div class="servicio-voucher-container">
 
     <div class="row no-print" style="margin-bottom: 20px; padding: 20px; display: flex; justify-content: flex-end; gap: 10px;">
-        <?= Html::a('<i class="fa fa-arrow-left"></i> Regresar', ['index'], ['class' => 'btn btn-default btn-flat', 'style' => 'border-radius:25px;']) ?>
+        <?= Html::a('<i class="fa fa-arrow-left"></i> Regresar', ['index'], ['class' => 'btn btn-default', 'style' => 'border-radius:25px;']) ?>
         
-        <button type="button" onclick="descargarVoucher()" class="btn btn-info btn-flat" style="border-radius:25px; font-weight:bold; padding: 10px 20px;">
+        <button type="button" onclick="descargarVoucher()" class="btn btn-info" style="border-radius:25px; font-weight:bold; padding: 10px 20px;">
             <i class="fa fa-download"></i> 1. Descargar Ficha
         </button>
 
@@ -44,7 +48,7 @@ foreach ($paxs as $idx => $p) {
             if ($tel): ?>
             <a href="https://api.whatsapp.com/send?phone=<?= $tel ?>&text=<?= urlencode($textoWhatsapp) ?>" 
                target="_blank" 
-               class="btn btn-success btn-flat" 
+               class="btn btn-success" 
                style="border-radius:25px; background-color:#25D366; border:none; font-weight:bold; padding: 10px 20px; box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);">
                 <i class="fa fa-whatsapp"></i> 2. Enviar al Conductor
             </a>
@@ -104,6 +108,11 @@ foreach ($paxs as $idx => $p) {
                             <div style="font-size: 10px; color: #64748B; margin-top: 3px;">
                                 <i class="fa fa-phone"></i> <?= $p_info->telefono ?? 'S/N' ?>
                             </div>
+                            <?php if (!empty($model->observacion_inicial)): ?>
+                                <div class="pax-obs-box">
+                                    <?= mb_strtoupper($model->observacion_inicial) ?>
+                                </div>
+                            <?php endif; ?>
                         </td>
                         <td class="text-center bold-dark" style="font-size: 14px;">
                             <?= date('h:i A', strtotime($p->hora)) ?>
@@ -124,12 +133,21 @@ foreach ($paxs as $idx => $p) {
         </div>
 
         <div class="v-bottom-section">
-            <?php if (!empty($model->observaciones)): ?>
-                <div class="v-obs-premium">
-                    <label>OBSERVACIONES DEL SERVICIO:</label>
-                    <p><?= mb_strtoupper($model->observaciones) ?></p>
-                </div>
-            <?php endif; ?>
+            <div class="v-extra-info-grid">
+                <?php if (!empty($model->observaciones)): ?>
+                    <div class="v-obs-premium">
+                        <label>OBSERVACIONES DEL SERVICIO:</label>
+                        <p><?= mb_strtoupper($model->observaciones) ?></p>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($pago && !empty($pago->observacion_pago)): ?>
+                    <div class="v-obs-premium" style="border-top: 1px solid #E2E8F0;">
+                        <label>OBSERVACIONES DE PAGO:</label>
+                        <p><?= mb_strtoupper($pago->observacion_pago) ?></p>
+                    </div>
+                <?php endif; ?>
+            </div>
 
             <div class="v-footer-premium">
                 CH GROUP TRASLADOS • SERVICIO EJECUTIVO • GENERADO: <?= date('d/m/Y H:i') ?>
@@ -139,9 +157,8 @@ foreach ($paxs as $idx => $p) {
 </div>
 
 <style>
-    /* Estructura Base - Recta */
     .voucher-premium-card {
-        width: 1100px; /* Un poco más ancho para las columnas separadas */
+        width: 1100px;
         margin: 0 auto;
         background: #FFFFFF;
         border: 4px solid #1B242D;
@@ -159,37 +176,32 @@ foreach ($paxs as $idx => $p) {
     /* Barra Conductor */
     .v-driver-premium { display: grid; grid-template-columns: 1.2fr 0.8fr 1fr; background: #1B242D; color: #FFF; }
     .v-driver-cell { padding: 12px 25px; border-right: 1px solid #334155; }
-    .v-driver-cell:last-child { border-right: none; }
     .v-driver-cell label { display: block; font-size: 9px; color: #EA4C2D; font-weight: 800; margin-bottom: 2px; }
     .v-driver-cell span { font-size: 14px; font-weight: 700; }
 
     /* Tabla */
     .table-premium { width: 100%; border-collapse: collapse; }
     .table-premium th {
-        background: #F1F5F9;
-        color: #1B242D;
-        font-size: 10px;
-        font-weight: 800;
-        text-transform: uppercase;
-        padding: 12px 15px;
-        border-bottom: 2px solid #1B242D;
-        border-right: 1px solid #CBD5E1;
-        text-align: left;
+        background: #F1F5F9; color: #1B242D; font-size: 10px; font-weight: 800;
+        text-transform: uppercase; padding: 12px 15px; border-bottom: 2px solid #1B242D;
+        border-right: 1px solid #CBD5E1; text-align: left;
     }
-    .table-premium td {
-        padding: 12px 15px;
-        border-bottom: 1px solid #E2E8F0;
-        border-right: 1px solid #F1F5F9;
-        font-size: 12px;
-        vertical-align: top;
-    }
-    .table-premium th:last-child, .table-premium td:last-child { border-right: none; }
+    .table-premium td { padding: 12px 15px; border-bottom: 1px solid #E2E8F0; border-right: 1px solid #F1F5F9; font-size: 12px; vertical-align: top; }
 
     .bold-orange { color: #EA4C2D; font-weight: 900; font-size: 15px; }
     .bold-dark { color: #1B242D; font-weight: 800; }
-    .text-center { text-align: center; }
     
-    /* Ubicaciones */
+    /* Observación debajo del pasajero */
+    .pax-obs-box { 
+        margin-top: 8px; 
+        padding: 4px 8px; 
+        background: #FFF7ED; 
+        border-left: 3px solid #EA4C2D; 
+        font-size: 10px; 
+        color: #9A3412; 
+        font-weight: 700;
+    }
+
     .cell-location { font-weight: 700; color: #1B242D; line-height: 1.3; }
     .text-blue { color: #3B82F6; margin-right: 4px; }
     .text-green { color: #10B981; margin-right: 4px; }
@@ -197,8 +209,8 @@ foreach ($paxs as $idx => $p) {
 
     /* Footer */
     .v-bottom-section { border-top: 2px solid #1B242D; }
-    .v-obs-premium { padding: 15px 25px; background: #FFF; border-bottom: 1px solid #E2E8F0; }
-    .v-obs-premium label { font-size: 10px; font-weight: 900; color: #EA4C2D; display: block; margin-bottom: 4px; }
+    .v-obs-premium { padding: 12px 25px; background: #FFF; }
+    .v-obs-premium label { font-size: 10px; font-weight: 900; color: #EA4C2D; display: block; margin-bottom: 2px; }
     .v-obs-premium p { font-size: 12px; font-weight: 700; color: #1B242D; margin: 0; }
 
     .v-footer-premium { padding: 12px; text-align: center; background: #1B242D; color: #94A3B8; font-size: 10px; font-weight: 700; }

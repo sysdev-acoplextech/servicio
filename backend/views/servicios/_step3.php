@@ -89,6 +89,19 @@ $variablesAdicionales = (new \yii\db\Query())
         color: #166534;
         font-weight: bold;
     }
+
+    /* Estilo para el área de observaciones */
+    .textarea-observacion {
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
+        padding: 12px;
+        resize: none;
+        transition: border-color 0.3s;
+    }
+    .textarea-observacion:focus {
+        border-color: #3498db;
+        outline: none;
+    }
 </style>
 
 <div class="box box-solid" style="background: #F8FAFC; border-radius: 15px; border: 1px solid #E2E8F0; padding: 20px;">
@@ -186,7 +199,6 @@ $variablesAdicionales = (new \yii\db\Query())
                 'id' => 'monto-recargo',
                 'style' => 'color: #d32f2f; font-weight: bold; border-radius: 8px;'
             ])->label('Recargo ($)') ?>
-            
         </div>
 
         <div class="col-md-2">
@@ -204,6 +216,16 @@ $variablesAdicionales = (new \yii\db\Query())
             ])->label('TOTAL') ?>
         </div>
     </div>
+
+    <div class="row" style="margin-top: 15px;">
+        <div class="col-md-12">
+            <?= $form->field($model, 'observacion_inicial')->textarea([
+                'rows' => 2,
+                'class' => 'form-control textarea-observacion',
+                'placeholder' => 'Escriba aquí las instrucciones específicas para el conductor...'
+            ])->label('<i class="fa fa-commenting-o"></i> Observación a ser enviada al conductor') ?>
+        </div>
+    </div>
 </div>
 
 <?php
@@ -218,7 +240,6 @@ $this->registerJs("
     }
 
     function calcularMontoTotal() {
-        // Función interna para limpiar y parsear números con coma
         var parseValue = function(id) {
             var val = $(id).val() || '0';
             return parseFloat(val.toString().replace(/\./g, '').replace(',', '.')) || 0;
@@ -228,7 +249,6 @@ $this->registerJs("
         var rec  = parseValue('#monto-recargo');
         var via  = parseValue('#monto-viatico');
         
-        // Sumar adicionales de las cards activas
         var adicionalSum = 0;
         $('.adicional-card.active').each(function() {
             adicionalSum += parseFloat($(this).data('monto')) || 0;
@@ -236,17 +256,14 @@ $this->registerJs("
 
         var total = base + rec + via + adicionalSum;
 
-        // Asignar total final con formato de coma
-        // Usamos toFixed(2) y cambiamos el punto por coma
         $('#monto-total-final').val(total.toFixed(2).replace('.', ','));
 
-        // Limpieza de errores para Yii2
         var ids = ['monto_base', 'monto_recargo', 'viaticos', 'monto'];
         var form = $('#w0');
 
         $.each(ids, function(i, attr) {
             var attributeId = 'servicios-' + attr; 
-            var container = $('.field-' + attributeId.replace(/_/g, '-')); // Adaptación de clase Yii
+            var container = $('.field-' + attributeId.replace(/_/g, '-')); 
             
             container.removeClass('has-error').addClass('has-success');
             container.find('.help-block').empty();
@@ -270,7 +287,6 @@ $this->registerJs("
         }
     }
 
-    // Click en adicionales
     $(document).on('click', '.adicional-card', function() {
         var card = $(this);
         var checkbox = card.find('input[type=\"checkbox\"]');
@@ -285,7 +301,6 @@ $this->registerJs("
         calcularMontoTotal();
     });
 
-    // Carga de recargo
     function obtenerRecargo(esInicial) {
         var horaSolo = '';
         $('.campo-hora-dinamico').each(function() {
@@ -310,7 +325,6 @@ $this->registerJs("
         });
     }
 
-    // Eventos
     $('#select-tarifario-padre').on('change', function() {
         var val = $(this).val();
         $('#id-selector-ruta-dep').prop('disabled', !val).val(null).trigger('change');
@@ -320,7 +334,6 @@ $this->registerJs("
     $(document).on('change', '#servicios-id_tipo_vehiculo', function() { aplicarPrecioBase(); });
     $(document).on('change blur', '.campo-hora-dinamico', function() { obtenerRecargo(false); });
     
-    // Al escribir manualmente
     $(document).on('keyup change', '#monto-base, #monto-recargo, #monto-viatico', function() {
         calcularMontoTotal();
     });

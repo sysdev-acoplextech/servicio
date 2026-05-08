@@ -686,7 +686,6 @@ class ServiciosController extends Controller
                         $nuevoCliente = new \backend\models\Cliente();
                         $nuevoCliente->nombre_apellido = $model->id_cliente;
                         
-                        // Ajustado al nombre exacto de tu columna en la base de datos
                         $nuevoCliente->telefono_principal = !empty($postData['ClienteNuevo']['telefono']) 
                             ? $postData['ClienteNuevo']['telefono'] 
                             : '0000';
@@ -697,7 +696,6 @@ class ServiciosController extends Controller
                             throw new \Exception("Error al crear el cliente: " . implode(', ', $nuevoCliente->getFirstErrors()));
                         }
 
-                        // Asignamos el ID del cliente recién creado al modelo de servicios
                         $model->id_cliente = $nuevoCliente->id_cliente;
                     }
 
@@ -711,14 +709,25 @@ class ServiciosController extends Controller
                         $model->monto = str_replace(',', '.', str_replace('.', '', $model->monto));
                     }
                     
-                    // Mapeo manual de viáticos a la columna de la base de datos
+                    // Mapeo manual de viáticos
                     $viaticosRaw = $postData['Servicios']['viaticos'] ?? '0';
                     $model->total_viatico = str_replace(',', '.', str_replace('.', '', $viaticosRaw));
 
                     // Datos obligatorios automáticos
                     $model->id_usuario = Yii::$app->user->identity->id;
                     $model->fecha_registro = date('Y-m-d');
-                    $model->id_estatus = $model->id_estatus ?: 5; // Por defecto Agendado
+                    
+                    // ASIGNACIÓN DE ESTATUS Y CAMPO CONFIRMADO
+                    $model->id_estatus = $model->id_estatus ?: 5; // Por defecto 5 (Agendado)
+                    
+                    if ($model->id_estatus == 11) {
+                        $model->confirmado = true; // O 1 si tu DB es de tipo entero
+                    } else {
+                        $model->confirmado = false; // Aseguramos que sea falso si no es 11
+                    }
+
+                    // Inicializar faltante igual al monto total al crear
+                    $model->faltante = $model->monto;
 
                     if (!$model->save()) {
                         $error = current($model->getFirstErrors());
@@ -734,12 +743,9 @@ class ServiciosController extends Controller
                             $ps->id_servicio = $model->id_servicio;
                             $ps->fecha = $model->fecha_servicio;
 
-                            // Si es nuevo pasajero (el usuario escribió texto en el Select2)
                             if (!is_numeric($data['id_pasajero'])) {
                                 $nuevoP = new \backend\models\Pasajero();
                                 $nuevoP->nombre_apellido = $data['id_pasajero'];
-                                
-                                // Capturamos el teléfono del pasajero que viaja en el array del Step 2
                                 $nuevoP->telefono = !empty($data['telefono']) ? $data['telefono'] : '0000'; 
                                 
                                 if (!$nuevoP->save()) {
@@ -747,15 +753,12 @@ class ServiciosController extends Controller
                                 }
                                 $ps->id_pasajero = $nuevoP->id_pasajero;
                             } else {
-                                // Si el pasajero ya existe, guardamos su ID
                                 $ps->id_pasajero = $data['id_pasajero'];
-                                
-                                // OPCIONAL: Si quieres actualizar el teléfono del pasajero existente si viene uno nuevo
                                 if (!empty($data['telefono'])) {
                                     $pExistente = \backend\models\Pasajero::findOne($data['id_pasajero']);
                                     if ($pExistente && $pExistente->telefono !== $data['telefono']) {
                                         $pExistente->telefono = $data['telefono'];
-                                        $pExistente->save(false); // Guardar sin validar para agilizar
+                                        $pExistente->save(false);
                                     }
                                 }
                             }
@@ -766,8 +769,7 @@ class ServiciosController extends Controller
                             $ps->google_map = $data['google_map'] ?? null;
                             
                             if (!$ps->save()) {
-                                $msg = "Error en Pasajero " . ($index + 1) . ": " . implode(', ', $ps->getFirstErrors());
-                                throw new \Exception($msg);
+                                throw new \Exception("Error en Pasajero " . ($index + 1) . ": " . implode(', ', $ps->getFirstErrors()));
                             }
                         }
                     }
@@ -776,7 +778,7 @@ class ServiciosController extends Controller
                     if (isset($postData['Servicios']['adicionales'])) {
                         foreach ($postData['Servicios']['adicionales'] as $id_var) {
                             $montoV = (new \yii\db\Query())->select(['monto'])->from('lista_precio')
-                                        ->where(['id_variable' => $id_var])->scalar() ?: 0;
+                                            ->where(['id_variable' => $id_var])->scalar() ?: 0;
 
                             $sa = new \backend\models\ServicioVariables();
                             $sa->id_servicio = $model->id_servicio;
@@ -790,7 +792,18 @@ class ServiciosController extends Controller
                     }
 
                     $transaction->commit();
-                    return $this->redirect(['view', 'id' => $model->id_servicio]);
+
+                    Yii::$app->session->setFlash('success', "
+                        <div style='display:flex; align-items:center; gap:10px;'>
+                            <i class='fa fa-check-circle' style='font-size:20px;'></i>
+                            <div>
+                                <strong>¡Servicio Creado!</strong><br>
+                                El servicio #" . $model->id_servicio . " se ha registrado correctamente con estatus " . ($model->confirmado ? 'CONFIRMADO' : 'AGENDADO') . ".
+                            </div>
+                        </div>
+                    ");
+
+                    return $this->redirect(['index']);
 
                 } catch (\Exception $e) {
                     $transaction->rollBack();
@@ -1842,124 +1855,144 @@ class ServiciosController extends Controller
 
    public function actionUpdate($id)
     {
-        $model = $this->findModel($id);
-        
-        // 1. Obtener los adicionales guardados para calcular la base real
-        $adicionalesModelos = \backend\models\ServicioVariables::find()
-            ->where(['id_servicio' => $id])
-            ->all();
+    $model = $this->findModel($id);
 
-        $sumaAdicionales = 0;
-        $adicionalesGuardados = [];
-        foreach ($adicionalesModelos as $relacion) {
-            $sumaAdicionales += (float)$relacion->monto;
-            $adicionalesGuardados[] = $relacion->id_variable_servicio;
+    // 1. Obtener los adicionales guardados para calcular la base real
+    $adicionalesModelos = \backend\models\ServicioVariables::find()
+    ->where(['id_servicio' => $id])
+    ->all();
+
+    $sumaAdicionales = 0;
+    $adicionalesGuardados = [];
+    foreach ($adicionalesModelos as $relacion) {
+    $sumaAdicionales += (float)$relacion->monto;
+    $adicionalesGuardados[] = $relacion->id_variable_servicio;
+    }
+
+    // 2. Calcular la Base Real: Total - Recargo - Viáticos - Adicionales
+    $baseCalculada = (float)$model->monto - (float)$model->monto_recargo - (float)$model->total_viatico - $sumaAdicionales;
+
+    // 3. Asignar formatos para la vista (Separadores de miles punto, decimal coma)
+    $model->monto_base = number_format($baseCalculada, 2, ',', '.');
+    $model->monto_recargo = number_format($model->monto_recargo, 2, ',', '.');
+    $model->viaticos = number_format($model->total_viatico, 2, ',', '.');
+
+    // --- Obtener los pasajeros ya guardados para este servicio ---
+    $pasajerosGuardados = \backend\models\PasajeroServicio::find()
+    ->where(['id_servicio' => $id])
+    ->all();
+
+    if ($this->request->isPost && $model->load($this->request->post())) {
+    $transaction = Yii::$app->db->beginTransaction();
+    try {
+        $postData = $this->request->post();
+
+        if (!empty($postData['cliente_proyecto_id'])) {
+            $model->id_cliente = $postData['cliente_proyecto_id'];
         }
 
-        // 2. Calcular la Base Real: Total - Recargo - Viáticos - Adicionales
-        $baseCalculada = (float)$model->monto - (float)$model->monto_recargo - (float)$model->total_viatico - $sumaAdicionales;
+        // Limpieza de formatos antes de guardar
+        $model->monto = str_replace(',', '.', str_replace('.', '', $model->monto));
+        $model->monto_recargo = str_replace(',', '.', str_replace('.', '', $model->monto_recargo));
+        
+        $viaticosRaw = $postData['Servicios']['viaticos'] ?? '0';
+        $model->total_viatico = str_replace(',', '.', str_replace('.', '', $viaticosRaw));
 
-        // 3. Asignar formatos para la vista (Separadores de miles punto, decimal coma)
-        $model->monto_base = number_format($baseCalculada, 2, ',', '.');
-        $model->monto_recargo = number_format($model->monto_recargo, 2, ',', '.');
-        $model->viaticos = number_format($model->total_viatico, 2, ',', '.');
+        // --- LÓGICA DE CONFIRMACIÓN ---
+        // Si el estatus es 11, marcamos el campo confirmado como TRUE
+        if ($model->id_estatus == 11) {
+            $model->confirmado = true;
+        } else {
+            $model->confirmado = false;
+        }
 
-        // --- NUEVO: Obtener los pasajeros ya guardados para este servicio ---
-        $pasajerosGuardados = \backend\models\PasajeroServicio::find()
-            ->where(['id_servicio' => $id])
-            ->all();
+        if (!$model->save()) {
+            $error = current($model->getFirstErrors());
+            throw new \Exception("Error en Servicio: " . $error);
+        }
 
-        if ($this->request->isPost && $model->load($this->request->post())) {
-            $transaction = Yii::$app->db->beginTransaction();
-            try {
-                $postData = $this->request->post();
+        // Actualizar pasajeros (Borrar anteriores y guardar nuevos)
+        \backend\models\PasajeroServicio::deleteAll(['id_servicio' => $model->id_servicio]);
 
-                if (!empty($postData['cliente_proyecto_id'])) {
-                    $model->id_cliente = $postData['cliente_proyecto_id'];
+        if (!empty($postData['Pasajeros'])) {
+            foreach ($postData['Pasajeros'] as $index => $data) {
+                if (empty($data['id_pasajero'])) continue;
+
+                $ps = new \backend\models\PasajeroServicio();
+                $ps->id_servicio = $model->id_servicio;
+                $ps->fecha = $model->fecha_servicio;
+
+                if (!is_numeric($data['id_pasajero'])) {
+                    $nuevoP = new \backend\models\Pasajero();
+                    $nuevoP->nombre_apellido = $data['id_pasajero'];
+                    $nuevoP->telefono = !empty($data['telefono']) ? $data['telefono'] : '0000'; 
+                    if(!$nuevoP->save()) {
+                        throw new \Exception("Error creando pasajero: " . current($nuevoP->getFirstErrors()));
+                    }
+                    $ps->id_pasajero = $nuevoP->id_pasajero;
+                } else {
+                    $ps->id_pasajero = $data['id_pasajero'];
                 }
 
-                // Limpieza de formatos antes de guardar
-                $model->monto = str_replace(',', '.', str_replace('.', '', $model->monto));
-                $model->monto_recargo = str_replace(',', '.', str_replace('.', '', $model->monto_recargo));
+                $ps->origen = $data['origen'] ?? 'N/A';
+                $ps->destino = $data['destino'] ?? 'N/A';
+                $ps->hora = $data['hora'] ?? date('H:i');
                 
-                $viaticosRaw = $postData['Servicios']['viaticos'] ?? '0';
-                $model->total_viatico = str_replace(',', '.', str_replace('.', '', $viaticosRaw));
-
-                if (!$model->save()) {
-                    $error = current($model->getFirstErrors());
-                    throw new \Exception("Error en Servicio: " . $error);
+                if (!$ps->save()) {
+                    $msg = "Error en Pasajero ".($index+1).": " . implode(', ', $ps->getFirstErrors());
+                    throw new \Exception($msg);
                 }
-
-                // Actualizar pasajeros (Borrar anteriores y guardar nuevos)
-                \backend\models\PasajeroServicio::deleteAll(['id_servicio' => $model->id_servicio]);
-
-                if (!empty($postData['Pasajeros'])) {
-                    foreach ($postData['Pasajeros'] as $index => $data) {
-                        if (empty($data['id_pasajero'])) continue;
-
-                        $ps = new \backend\models\PasajeroServicio();
-                        $ps->id_servicio = $model->id_servicio;
-                        $ps->fecha = $model->fecha_servicio;
-
-                        if (!is_numeric($data['id_pasajero'])) {
-                            $nuevoP = new \backend\models\Pasajero();
-                            $nuevoP->nombre_apellido = $data['id_pasajero'];
-                            $nuevoP->telefono = '0000'; 
-                            if(!$nuevoP->save()) {
-                                throw new \Exception("Error creando pasajero: " . current($nuevoP->getFirstErrors()));
-                            }
-                            $ps->id_pasajero = $nuevoP->id_pasajero;
-                        } else {
-                            $ps->id_pasajero = $data['id_pasajero'];
-                        }
-
-                        $ps->origen = $data['origen'] ?? 'N/A';
-                        $ps->destino = $data['destino'] ?? 'N/A';
-                        $ps->hora = $data['hora'] ?? date('H:i');
-                        
-                        if (!$ps->save()) {
-                            $msg = "Error en Pasajero ".($index+1).": " . implode(', ', $ps->getFirstErrors());
-                            throw new \Exception($msg);
-                        }
-                    }
-                }
-
-                // Actualizar adicionales (Borrar anteriores y guardar nuevos)
-                \backend\models\ServicioVariables::deleteAll(['id_servicio' => $model->id_servicio]);
-
-                if (isset($postData['Servicios']['adicionales'])) {
-                    foreach ($postData['Servicios']['adicionales'] as $id_var) {
-                        $montoV = (new \yii\db\Query())->select(['monto'])->from('lista_precio')
-                            ->where(['id_variable' => $id_var])->scalar() ?: 0;
-
-                        $sa = new \backend\models\ServicioVariables();
-                        $sa->id_servicio = $model->id_servicio;
-                        $sa->id_variable_servicio = $id_var;
-                        $sa->monto = $montoV;
-                        $sa->cantidad = 1;
-                        
-                        if (!$sa->save()) {
-                            throw new \Exception("Error en Adicional");
-                        }
-                    }
-                }
-
-                $transaction->commit();
-                return $this->redirect(['view', 'id' => $model->id_servicio]);
-
-            } catch (\Exception $e) {
-                $transaction->rollBack();
-                Yii::$app->session->setFlash('error', $e->getMessage());
             }
         }
 
-        return $this->render('update', [
-            'model' => $model,
-            'variablesAdicionales' => \backend\models\VariablesServicio::find()->all(),
-            'adicionalesGuardados' => $adicionalesGuardados,
-            'adicionalesModelos' => $adicionalesModelos,
-            'pasajerosGuardados' => $pasajerosGuardados, // Pasamos los pasajeros actuales a la vista
-        ]);
+        // Actualizar adicionales (Borrar anteriores y guardar nuevos)
+        \backend\models\ServicioVariables::deleteAll(['id_servicio' => $model->id_servicio]);
+
+        if (isset($postData['Servicios']['adicionales'])) {
+            foreach ($postData['Servicios']['adicionales'] as $id_var) {
+                $montoV = (new \yii\db\Query())->select(['monto'])->from('lista_precio')
+                    ->where(['id_variable' => $id_var])->scalar() ?: 0;
+
+                $sa = new \backend\models\ServicioVariables();
+                $sa->id_servicio = $model->id_servicio;
+                $sa->id_variable_servicio = $id_var;
+                $sa->monto = $montoV;
+                $sa->cantidad = 1;
+                
+                if (!$sa->save()) {
+                    throw new \Exception("Error en Adicional");
+                }
+            }
+        }
+
+        $transaction->commit();
+
+        // Mensaje de éxito con diseño
+        Yii::$app->session->setFlash('success', "
+            <div style='display:flex; align-items:center; gap:10px;'>
+                <i class='fa fa-check-circle' style='font-size:20px;'></i>
+                <div>
+                    <strong>¡Cambios Guardados!</strong><br>
+                    El servicio #" . $model->id_servicio . " se ha actualizado correctamente.
+                </div>
+            </div>
+        ");
+
+        return $this->redirect(['index']);
+
+    } catch (\Exception $e) {
+        $transaction->rollBack();
+        Yii::$app->session->setFlash('error', $e->getMessage());
+    }
+    }
+
+    return $this->render('update', [
+    'model' => $model,
+    'variablesAdicionales' => \backend\models\VariablesServicio::find()->all(),
+    'adicionalesGuardados' => $adicionalesGuardados,
+    'adicionalesModelos' => $adicionalesModelos,
+    'pasajerosGuardados' => $pasajerosGuardados,
+    ]);
     }
 
     public function actionConfirmar($id)
@@ -1969,10 +2002,22 @@ class ServiciosController extends Controller
 
         // Asignamos el ID de estatus correspondiente a 'Confirmado'
         $model->id_estatus = 11;
+        
+        // NUEVO: Sincronizamos el campo confirmado a TRUE
+        $model->confirmado = true;
 
         // Intentamos guardar el cambio
-        if ($model->save(false)) { // Usamos false para saltar validaciones de campos no relacionados si es necesario
-            Yii::$app->session->setFlash('success', "El servicio #{$id} ha sido confirmado con éxito.");
+        if ($model->save(false)) { 
+            // Mensaje de éxito con diseño consistente
+            Yii::$app->session->setFlash('success', "
+                <div style='display:flex; align-items:center; gap:10px;'>
+                    <i class='fa fa-check-double' style='font-size:20px;'></i>
+                    <div>
+                        <strong>¡Servicio Confirmado!</strong><br>
+                        El servicio #{$id} ha sido marcado como confirmado y el estatus se actualizó correctamente.
+                    </div>
+                </div>
+            ");
         } else {
             Yii::$app->session->setFlash('error', "No se pudo confirmar el servicio.");
         }

@@ -1,4 +1,5 @@
 <?php
+
 use yii\helpers\Html;
 use yii\widgets\ActiveForm;
 
@@ -30,10 +31,10 @@ $proyectoIdExistente = $model->cliente_proyecto_id ?? 'null';
 
         <div class="form-section">
             <div class="section-header"><i class="fa fa-users"></i> Detalle de Pasajeros y Ruta</div>
-            <?php 
+            <?php
             // PASAMOS LOS PASAJEROS GUARDADOS AL STEP 2 PARA QUE SE REPINTE EN EL UPDATE
             echo $this->render('_step2', [
-                'form' => $form, 
+                'form' => $form,
                 'model' => $model,
                 'pasajerosGuardados' => $pasajerosGuardados ?? []
             ]) ?>
@@ -42,14 +43,17 @@ $proyectoIdExistente = $model->cliente_proyecto_id ?? 'null';
         <div class="form-section" style="background: #fcfdfd;">
             <div class="section-header"><i class="fa fa-calculator"></i> Tarifas y Adicionales</div>
             <?= $this->render('_step3', [
-                'form' => $form, 
-                'model' => $model, 
-                'variablesAdicionales' => $variablesAdicionales 
+                'form' => $form,
+                'model' => $model,
+                'variablesAdicionales' => $variablesAdicionales
             ]) ?>
         </div>
 
-        <div class="form-group text-right">
-            <?= Html::a('CANCELAR', ['index'], ['class' => 'btn btn-default', 'style' => 'border-radius: 10px; padding: 10px 25px;']) ?>
+        <div class="form-group text-right" style="display: flex; justify-content: flex-end; gap: 15px; align-items: center;">
+            <?= Html::a('<i class="fa fa-arrow-left"></i> REGRESAR', ['index'], [
+                'class' => 'btn btn-default',
+                'style' => 'border-radius: 30px; padding: 12px 30px; font-weight: bold; border: 1px solid #d1d5db; color: #64748b;'
+            ]) ?>
             <?= Html::submitButton('<i class="fa fa-save"></i> GUARDAR CAMBIOS TOTALES', [
                 'class' => 'btn btn-success btn-lg',
                 'style' => 'border-radius: 30px; padding: 15px 50px; font-weight: bold; box-shadow: 0 4px 10px rgba(46, 204, 113, 0.3);'
@@ -62,7 +66,7 @@ $proyectoIdExistente = $model->cliente_proyecto_id ?? 'null';
     <div class="sticky-panel">
         <div class="card-total" style="position: sticky; top: 20px; background: #1a2a3a; color: white; border-radius: 15px; padding: 25px;">
             <h4 style="margin-top: 0; font-size: 13px; color: #94a3b8; letter-spacing: 1px;">RESUMEN DE MODIFICACIÓN</h4>
-            
+
             <div class="detail-row" style="display: flex; justify-content: space-between; margin-bottom: 10px;">
                 <span>Monto Base:</span> <b id="lbl-base">0,00</b>
             </div>
@@ -75,7 +79,7 @@ $proyectoIdExistente = $model->cliente_proyecto_id ?? 'null';
             <div class="detail-row" style="display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #334155;">
                 <span>Variables:</span> <b id="lbl-extras">0,00</b>
             </div>
-            
+
             <div class="total-display" style="padding-top: 15px; text-align: center;">
                 <span style="display: block; font-size: 11px; color: #94a3b8;">TOTAL ESTIMADO</span>
                 <div style="font-size: 32pt; font-weight: bold; color: #4ade80;">
@@ -93,9 +97,9 @@ $proyectoIdExistente = $model->cliente_proyecto_id ?? 'null';
 
 <?php
 // 1. Valores puros del modelo
-$montoTotalPuro   = (float)$model->monto; 
-$recargoPuro      = (float)$model->monto_recargo; 
-$viaticoPuro      = (float)$model->total_viatico; 
+$montoTotalPuro   = (float)$model->monto;
+$recargoPuro      = (float)$model->monto_recargo;
+$viaticoPuro      = (float)$model->total_viatico;
 
 // 2. Sumar adicionales guardados para el cálculo de la base inicial
 $sumaAdicionalesGuardados = 0;

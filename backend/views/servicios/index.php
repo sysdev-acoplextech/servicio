@@ -258,6 +258,19 @@ $this->registerJs("
                             </span>
                         </div>
 
+                         <?php if ($pasajero && !empty($pasajero->google_map)): 
+                            $query = trim($pasajero->google_map);
+                            $urlMaps = "https://www.google.com/maps/search/?api=1&query=" . rawurlencode($query);
+                        ?>
+                            <a href="<?= $urlMaps ?>" 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            class="btn btn-xs" 
+                            style="display: block; width: 100%; margin-bottom: 15px; background: #0EA5E9; color: white; font-weight: 800; font-size: 10px; border-radius: 20px; border: none; padding: 8px; text-align: center; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                            <i class="fa fa-map-o"></i> ABRIR RUTA EN MAPS
+                            </a>
+                        <?php endif; ?>
+
                         <div class="card-driver-info">
                             <div class="driver-avatar">
                                 <i class="fa <?= $conductor ? 'fa-user' : 'fa-user-secret' ?>"></i>
@@ -273,21 +286,75 @@ $this->registerJs("
                                 <?php endif; ?>
                             </div>
                         </div>
+                        
 
                         <div style="margin-top: 15px; display: flex; gap: 5px; flex-wrap: wrap;">
                             <?= Html::a('<i class="fa fa-eye"></i>', ['view', 'id' => $model->id_servicio], ['class' => 'btn btn-default btn-sm', 'style' => 'border-radius:10px; font-weight:700; padding: 5px 12px;']) ?>
                             
-                            <?php if (($esConfirmado || $esPagoTotalStatus) && $conductor): 
-                                $telConductor = $conductor->telefono_principal ?? $conductor->telefono_alterno ?? '';
-                                if (!empty($telConductor)): ?>
-                                    <?= Html::a('<i class="fa fa-whatsapp"></i>', "https://api.whatsapp.com/send?phone=" . preg_replace('/[^0-9]/', '', $telConductor), [
-                                        'class' => 'btn btn-success btn-sm', 
-                                        'target' => '_blank',
-                                        'style' => 'border-radius:10px; background:#25D366; border:none; color:white; padding: 5px 12px;',
-                                        'title' => 'WhatsApp Conductor'
-                                    ]) ?>
-                                <?php endif; ?>
-                            <?php endif; ?>
+<?php 
+if (($esConfirmado || $esPagoTotalStatus) && $conductor): 
+    // 1. Limpieza estricta del teléfono
+    $telRaw = $conductor->telefono_principal ?? $conductor->telefono_alterno ?? '';
+    $phoneClean = preg_replace('/[^0-9]/', '', $telRaw);
+    
+    if (!empty($phoneClean)): 
+        // 2. Construcción de la Hoja de Ruta
+        $msj = "🚐 *HOJA DE RUTA - CH GROUP*\n";
+        $msj .= "📅 " . mb_strtoupper(Yii::$app->formatter->asDate($model->fecha_servicio, 'php:l d/m/Y')) . "\n\n";
+        
+        $msj .= "👨🏻‍✈️ *CONDUCTOR:* " . mb_strtoupper($conductor->nombres . ' ' . $conductor->apellidos) . "\n";
+        if (isset($vehiculo) && $vehiculo) {
+            $msj .= "🚗 *VEHÍCULO:* " . mb_strtoupper($vehiculo->nombre_marca . " [" . $vehiculo->placa . "]") . "\n";
+        }
+        $msj .= "--------------------------\n\n";
+
+        // Buscamos los trayectos
+        $paxServicios = \backend\models\PasajeroServicio::find()->where(['id_servicio' => $model->id_servicio])->all();
+        
+        foreach ($paxServicios as $idx => $ps) {
+            $paxInfo = \backend\models\Pasajero::findOne($ps->id_pasajero);
+            $n = $idx + 1;
+            
+            $msj .= "*RUTA {$n}* - {$ps->hora}\n";
+            $msj .= "👤 " . ($paxInfo ? mb_strtoupper($paxInfo->nombre_apellido) : 'N/A') . "\n";
+            $msj .= "📍 Origen: " . mb_strtoupper($ps->origen) . "\n";
+            
+            // Lógica exacta de tu tarjeta para el enlace de Google Maps
+            if (!empty($ps->google_map)) {
+                $queryMaps = trim($ps->google_map);
+                $urlMaps = "https://www.google.com/maps/search/?api=1&query=" . rawurlencode($queryMaps);
+                $msj .= "🗺️ *ABRIR EN MAPS:* " . $urlMaps . "\n";
+            }
+            
+            $msj .= "🏁 Destino: " . mb_strtoupper($ps->destino) . "\n";
+            
+            if (!empty($ps->referencia_origen)) {
+                $msj .= "ℹ️ Ref: " . mb_strtoupper($ps->referencia_origen) . "\n";
+            }
+            $msj .= "\n";
+        }
+
+        if (!empty($model->observaciones)) {
+            $msj .= "📝 *OBSERVACIONES:* " . mb_strtoupper($model->observaciones) . "\n";
+        }
+        
+        if (!empty($model->observacion_inicial)) {
+            $msj .= "📌 *NOTA:* " . mb_strtoupper($model->observacion_inicial) . "\n";
+        }
+
+        // 3. Generación de la URL final para el botón
+        $urlWhatsapp = "https://api.whatsapp.com/send?phone=" . $phoneClean . "&text=" . urlencode($msj);
+?>
+        <?= Html::a('<i class="fa fa-whatsapp"></i>', $urlWhatsapp, [
+            'class' => 'btn btn-success btn-sm', 
+            'target' => '_blank',
+            'style' => 'border-radius:10px; background:#25D366; border:none; color:white; padding: 5px 12px;',
+            'title' => 'Enviar Hoja de Ruta',
+            'data-pjax' => '0', 
+            'rel' => 'noreferrer noopener'
+        ]) ?>
+    <?php endif; ?>
+<?php endif; ?>
 
                             <?php if (!$esConfirmado && !$esPagoTotalStatus): ?>
                                 <?= Html::a('<i class="fa fa-check"></i>', ['confirmar', 'id' => $model->id_servicio], [
